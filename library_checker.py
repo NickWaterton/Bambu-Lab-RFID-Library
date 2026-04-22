@@ -40,6 +40,16 @@ CATEGORY_MAP = {
   'ASA Aero': 'ASA',
 }
 
+# Maps tag detailed_filament_type values for materials shared across multiple library folders.
+# Value is (single_colour_folder, multi_colour_folder).
+# Note: 'PLA Silk+' stores 'PLA Silk+' in the tag and needs no entry here.
+#       'PLA Silk' covers two distinct products:
+#         - PLA Silk (discontinued single-colour) → PLA Silk/
+#         - PLA Silk Multi-Color                  → PLA Silk Multi-Color/
+MULTI_COLOR_MATERIAL_MAP = {
+  'PLA Silk': ('PLA Silk', 'PLA Silk Multi-Color'),
+}
+
 MATERIAL_MAP = {
   'Support for PA': ['Support for PA-PET'],
   'Support For PA': ['Support for PA-PET'],
@@ -48,10 +58,22 @@ MATERIAL_MAP = {
   'Support for PLA': ['Support for PLA (New Version)', 'Support for PLA-PETG'],
   'PETG-CF': ['PETG CF'],
   'PETG HF': ['PETG Translucent'],
-  'PLA Basic': [ 'PLA Basic Gradient', 'PLA Silk Multi-Color'],
-  'PLA Silk': ['PLA Silk Multi-Color'],
+  'PLA Basic': ['PLA Basic Gradient'],
   'PLA': ['PLA Silk Multi-Color'],
 }
+
+
+def resolve_material(tag_data):
+    """
+    Return the canonical library folder name for a tag's material.
+    For materials in MULTI_COLOR_MATERIAL_MAP, multi-colour tags map to the
+    multi folder; single-colour tags map to the single folder.
+    """
+    base = tag_data['detailed_filament_type']
+    if base in MULTI_COLOR_MATERIAL_MAP:
+        single_folder, multi_folder = MULTI_COLOR_MATERIAL_MAP[base]
+        return multi_folder if tag_data.get('filament_color_count', 1) > 1 else single_folder
+    return base
 
 def load_library(print_error=False, debug_color=None):
   library = {}
@@ -82,16 +104,24 @@ def load_library(print_error=False, debug_color=None):
         library[category][material][color_dir].append(color_hex)
 
     category = CATEGORY_MAP.get(category, category)
-    material_list = MATERIAL_MAP.get(material, material)
-    if not isinstance(material_list, list):
-      material_list = [material_list]
-    if material not in material_list:
-      material_list.append(material)
+    resolved = resolve_material(tag.data)
+    # For MULTI_COLOR_MATERIAL_MAP entries, only the mapped folder names are valid.
+    if material in MULTI_COLOR_MATERIAL_MAP:
+      single_folder, multi_folder = MULTI_COLOR_MATERIAL_MAP[material]
+      if tag.data.get('filament_color_count', 1) > 1:
+        material_list = [multi_folder]
+      else:
+        material_list = [single_folder]
+    else:
+      extra = MATERIAL_MAP.get(material, [])
+      if not isinstance(extra, list):
+        extra = [extra]
+      material_list = list(dict.fromkeys([resolved, material] + extra))
     if debug_color:
       debug_color.print('\u2588', style=color_hex[0:7], end=' ')
       print(f'{color_hex} {file.relative_to(LIBRARY_ROOT)}')
     if print_error and (cat_dir != category or mat_dir not in material_list):
-      print(f"\t[!] {file.relative_to(LIBRARY_ROOT)} may be in the wrong directory! Should be in {category}/{material}")
+      print(f"\t[!] {file.relative_to(LIBRARY_ROOT)} may be in the wrong directory! Should be in {category}/{resolved}")
 
   if debug_color:
     print("Loading done")

@@ -1,3 +1,5 @@
 .bambulab_cache.sqlite
 *.pyc
 .DS_Store
+__pycache__/
+_quarantine/
