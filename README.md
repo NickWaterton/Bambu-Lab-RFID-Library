@@ -9,16 +9,149 @@ This repository contains a collection of RFID tag scans from Bambu Lab filament 
 
 For more information about Bambu Lab RFID tags and their format, see https://github.com/queengooborg/Bambu-Lab-RFID-Tag-Guide.
 
-## Viewing Tag Data
+## Tools
 
-A script is included in this repository, `parse.py`, that will parse a tag dump and extract its information in an easy-to-read terminal output and easy-to-parse JSON format. To run it, simply run `python3 parse.py [/path/to/tag.bin-or-json]`.
+A collection of Python scripts is included in this repository to help scan, manage, and maintain the library. All scripts require **Python 3.6 or higher**.
 
 > [!NOTE]
-> Python 3.6 or higher is required to run scripts.
+> Scripts that communicate with a Proxmark3 (`scanTag.py`, `writeTag.py`) also require a Proxmark3 running the [Iceman firmware](https://github.com/RfidResearchGroup/proxmark3) (v4.21128 or higher). Set the `PROXMARK3_DIR` environment variable to your Proxmark3 installation directory (e.g. `D:\Proxmark3` on Windows).
+
+---
+
+### `scanTag.py` — Scan a tag and add it to the library
+
+Reads a Bambu Lab RFID tag using a Proxmark3 and adds the data to the library in the correct location.
+
+```
+python scanTag.py
+```
+
+**What it does:**
+
+1. Waits for you to present a spool to the Proxmark3 (shows a spinner while searching).
+2. Checks whether the tag's UID is already in the library and shows where, if so.
+3. Derives the tag's sector keys from the UID (no sniffing required) and dumps all sectors.
+4. Parses the dump and displays the material, colour hex, colour count, and variant ID.
+5. Looks up the **official colour name** from Bambu Lab's colour database — fetched live from the [BambuStudio GitHub repository](https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/filaments_color_codes.json) if available, with a fallback to a locally installed Bambu Studio copy.
+6. Presents the official name as the default; warns if you type something different.
+7. Saves the dump to the correct `Category/Material/Colour/UID/` folder and generates additional file formats (JSON, NFC).
+8. Optionally updates the README status table.
+
+---
+
+### `writeTag.py` — Write a library dump to a blank tag
+
+Writes an existing dump from the library to a blank writable RFID tag, allowing third-party spools to be recognised by Bambu Lab printers just like genuine spools.
+
+```
+python writeTag.py [path/to/dump.bin] [path/to/key.bin]
+```
+
+If no arguments are given the script will prompt for the paths. It displays the filament data that will be written and requires explicit confirmation before permanently write-locking the tag.
+
+**Compatible blank tags:** Gen 2 FUID, Gen 4 FUID, Gen 4 UFUID. The script detects which type is on the reader and uses the appropriate write command.
+
+---
+
+### `parse.py` — Parse and display tag data
+
+Parses a tag dump file (`.bin` or `.json`) and prints its contents in a human-readable format. Also writes a `.json` sidecar file alongside the dump.
+
+```
+python parse.py path/to/tag-dump.bin
+```
+
+---
+
+### `fix_library.py` — Find and fix misplaced tag folders
+
+Scans all dump files and reports entries where the folder path doesn't match the material/category recorded in the tag data. With `--fix`, moves folders to the correct location automatically.
+
+```
+python fix_library.py [library_root] [--fix] [--quarantine]
+```
+
+| Flag | Effect |
+|------|--------|
+| *(none)* | Report mismatches only — nothing is moved. |
+| `--fix` | Move misplaced folders to their correct location. Stale duplicates (identical data already at the destination) are removed. |
+| `--fix --quarantine` | Same as `--fix`, but entries with suspicious/corrupt tag data are moved to `_quarantine/` with a note instead of being placed in the main library. |
+
+---
+
+### `library_checker.py` — Check for errors and colour mismatches
+
+Scans the library and reports:
+
+- Tags that appear to be stored in the wrong category or material folder.
+- Colour directories that contain tags with more than one distinct hex colour code.
+
+```
+python library_checker.py [--color_list] [--dump_colors]
+```
+
+---
+
+### `update_readme.py` — Sync README status from actual library data
+
+Scans the library and updates the ✅/❌ status icons and variant ID columns in this README to reflect what is actually on disk. Rows marked ⚠️ or ⏳ are left untouched (those statuses are set manually).
+
+```
+python update_readme.py [library_root] [--dry-run]
+```
+
+---
+
+### `convert.py` — Convert dump files to additional formats
+
+Converts dumps in a UID directory to JSON and NFC formats, and normalises any non-standard filenames to the `hf-mf-<UID>-dump.bin` convention.
+
+```
+python convert.py path/to/uid/directory
+```
+
+---
+
+### `repair.py` — Restore missing sector-trailer keys in a dump
+
+Repairs dump files where the sector trailer keys have been zeroed out (which can happen when dumping with certain tools). Re-derives the correct keys from the UID using the Bambu KDF and writes them back in place.
+
+```
+python repair.py path/to/dump.bin
+```
+
+---
+
+### `deriveKeys.py` — Derive sector keys for a given UID
+
+Prints the 32 Bambu Lab sector keys (16 Key-A + 16 Key-B) for a tag UID. Useful for scripting or manual Proxmark3 operations.
+
+```
+python deriveKeys.py <UID in hex>
+```
+
+---
+
+### `scrape_filaments.py` — Discover new filaments from the Bambu store
+
+Scrapes the Bambu Lab online store to find filament types and colours not yet listed in this README, and generates the stub table rows ready for the next `update_readme.py` run.
+
+```
+python scrape_filaments.py
+```
+
+---
 
 ## Contributing
 
-The best way to contribute is to provide data for Bambu Lab RFID tags. Not sure how to obtain the data? Check out the [guide written in the Bambu Lab RFID Tag Guide repository](https://github.com/queengooborg/Bambu-Lab-RFID-Tag-Guide/blob/main/docs/ReadTags.md)!
+The best way to contribute is to scan tags and submit a Pull Request. The easiest workflow is:
+
+1. Clone this repository.
+2. Run `python scanTag.py` with a Proxmark3 attached.
+3. Present each spool — the script scans the tag, looks up the official colour name, and saves the data in the right place automatically.
+4. Commit the new files and open a Pull Request.
+
+Not sure how to set up a Proxmark3? See the [Bambu Lab RFID Tag Guide](https://github.com/queengooborg/Bambu-Lab-RFID-Tag-Guide/blob/main/docs/ReadTags.md) for detailed instructions.
 
 Tags are stored in the following folder structure: `Material Category` > `Material Name` > `Color Name` > `Tag UID` > `Tag Files`
 
