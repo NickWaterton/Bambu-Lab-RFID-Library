@@ -7,7 +7,7 @@
 
 This repository contains a collection of RFID tag scans from Bambu Lab filament spools. The data can be used to create cloned tags for Bambu Lab printers or for research purposes.
 
-For more information about Bambu Lab RFID tags and their format, see https://github.com/queengooborg/Bambu-Lab-RFID-Tag-Guide.
+For more information about Bambu Lab RFID tags and their format, see https://github.com/NickWaterton/Bambu-Lab-RFID-Tag-Guide.
 
 ## Tools
 
@@ -151,7 +151,7 @@ The best way to contribute is to scan tags and submit a Pull Request. The easies
 3. Present each spool — the script scans the tag, looks up the official colour name, and saves the data in the right place automatically.
 4. Commit the new files and open a Pull Request.
 
-Not sure how to set up a Proxmark3? See the [Bambu Lab RFID Tag Guide](https://github.com/queengooborg/Bambu-Lab-RFID-Tag-Guide/blob/main/docs/ReadTags.md) for detailed instructions.
+Not sure how to set up a Proxmark3? See the [Bambu Lab RFID Tag Guide](https://github.com/NickWaterton/Bambu-Lab-RFID-Tag-Guide/blob/main/docs/ReadTags.md) for detailed instructions.
 
 Tags are stored in the following folder structure: `Material Category` > `Material Name` > `Color Name` > `Tag UID` > `Tag Files`
 
@@ -608,7 +608,7 @@ Status Icon Legend:
 
 ## History
 
-When Bambu Lab released the AMS for their 3D printers, it featured an RFID reader which could read RFID tags embedded on their filament spools to automatically update details such as material type, color and amount of remaining filament. However, the RFID tags were read-protected by keys, signed with an RSA2048 signature and structured in a proprietary format, which meant that only Bambu Lab could create these particular RFID tags and they could only be used on Bambu Lab printers. This led to the start of the [Bambu Research Group and a project to reverse engineer the RFID tag format](https://github.com/queengooborg/Bambu-Lab-RFID-Tag-Guide) in order to develop an open standard for all filament manufacturers and printers.
+When Bambu Lab released the AMS for their 3D printers, it featured an RFID reader which could read RFID tags embedded on their filament spools to automatically update details such as material type, color and amount of remaining filament. However, the RFID tags were read-protected by keys, signed with an RSA2048 signature and structured in a proprietary format, which meant that only Bambu Lab could create these particular RFID tags and they could only be used on Bambu Lab printers. This led to the start of the [Bambu Research Group and a project to reverse engineer the RFID tag format](https://github.com/NickWaterton/Bambu-Lab-RFID-Tag-Guide) in order to develop an open standard for all filament manufacturers and printers.
 
 Of course, to research the tag format, a lot of tag data was required. This led to a community effort to scan lots of tags and cross-reference the data with known details about each spool. Eventually, enough of the format was reverse engineered to be able to determine what an open standard would need. But, the tag scanning didn't stop there, as the community realized another benefit to the collection of tags: even though custom tags couldn't be created due to the signing of the data, the data could be _cloned_ onto new tags and used to tell Bambu Lab printers what material and color a spool was, just like Bambu Lab first-party spools.
 
