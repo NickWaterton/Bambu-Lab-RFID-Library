@@ -7,21 +7,14 @@
 
 import sys
 from pathlib import Path
-from Crypto.Protocol.KDF import HKDF
-from Crypto.Hash import SHA256
 
+from deriveKeys import kdf
 from parse import BYTES_PER_BLOCK, BLOCKS_PER_SECTOR, TOTAL_SECTORS, TOTAL_BYTES
 
 if not sys.version_info >= (3, 6):
   raise Exception("Python 3.6 or higher is required!")
 
 INVALID_KEYS = [b"\xFF" * 6, b"\x00" * 6]
-
-# Key derivation — same algorithm and return type as deriveKeys.py in the Tag Guide.
-# Returns [keys_a, keys_b] where each is a list of 16 six-byte keys.
-def kdf(uid):
-    salt = bytes([0x9a,0x75,0x9c,0xf2,0xc4,0xf7,0xca,0xff,0x22,0x2c,0xb9,0x76,0x9b,0x41,0xbc,0x96])
-    return [HKDF(uid, 6, salt, SHA256, 16, context=b"RFID-A\0"), HKDF(uid, 6, salt, SHA256, 16, context=b"RFID-B\0")]
 
 def sector_trailer_offset(sector):
     block_index = sector * BLOCKS_PER_SECTOR + 3
