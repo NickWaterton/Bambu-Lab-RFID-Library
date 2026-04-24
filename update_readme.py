@@ -143,6 +143,42 @@ def process_line(line, library_root):
     return '|'.join(cells) + '\n', True, f"{rel_path}: {', '.join(parts)}"
 
 
+def _check_broken_links(lines, library_root):
+    """
+    Scan README lines for table rows whose link path does not exist on disk.
+    Returns a list of (display_name, rel_path) tuples for broken links.
+    These arise when a colour folder is renamed without updating the README row.
+    """
+    broken = []
+    for line in lines:
+        raw = line.rstrip('\n')
+        if raw.count('|') < 4 or '](./' not in raw:
+            continue
+        cells = raw.split('|')
+        if len(cells) < 6:
+            continue
+        link_match = re.search(r'\[([^\]]+)\]\(\./([^)]+)\)', cells[1])
+        if not link_match:
+            continue
+        display = link_match.group(1)
+        rel_path = unquote(link_match.group(2))
+
+        for alias, real in PATH_ALIASES.items():
+            if rel_path == alias or rel_path.startswith(alias + '/'):
+                rel_path = real + rel_path[len(alias):]
+                break
+
+        color_dir = library_root / rel_path
+        # Only warn about colour-level folders (3 path components) that have a ✅ status
+        # but no matching folder on disk.  Missing ❌ folders are normal (not yet scanned).
+        parts = Path(rel_path).parts
+        if len(parts) == 3 and not color_dir.exists():
+            # Check whether this row carries a ✅ status
+            if '✅' in raw:
+                broken.append((display, rel_path))
+    return broken
+
+
 def run(library_root, dry_run=False):
     """Update README.md in library_root. Returns number of changes made."""
     library_root = Path(library_root).resolve()
@@ -163,6 +199,18 @@ def run(library_root, dry_run=False):
         new_lines.append(new_line)
         if changed:
             changes.append(description)
+
+    # Warn about README rows whose colour folder no longer exists on disk.
+    # This happens when fix_library renames a colour folder but the README link
+    # is not updated to match.  These rows will silently flip to ❌ on the
+    # next update_readme run even though data may exist under the new name.
+    broken = _check_broken_links(lines, library_root)
+    if broken:
+        print(f"\nWARNING: {len(broken)} README row(s) link to non-existent folder(s).")
+        print("  These rows may have stale display names or link paths.")
+        print("  Update the README row (display text + URL) to match the actual folder name.")
+        for display, rel_path in broken:
+            print(f"    '{display}' -> {rel_path}")
 
     if not changes:
         print("README is already up to date.")
