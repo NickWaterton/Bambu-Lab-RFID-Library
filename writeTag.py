@@ -52,6 +52,39 @@ def parse_dump_summary(dump_path):
     except Exception:
         return None
 
+def resolve_dump_and_key(path):
+    """
+    Given a path, return (tagdump, keydump) by auto-discovery where possible.
+
+    Accepted forms:
+      - A UID directory  (contains exactly one *-dump.bin and one *-key.bin)
+      - A *-dump.bin file (key is inferred from the same directory)
+      - Any other file   (keydump returned as None — caller must supply it)
+
+    Raises ValueError if a directory is given but the files cannot be found
+    unambiguously.
+    """
+    p = Path(path)
+
+    if p.is_dir():
+        dumps = sorted(p.glob('*-dump.bin'))
+        keys  = sorted(p.glob('*-key.bin'))
+        if not dumps:
+            raise ValueError(f"No *-dump.bin file found in: {p}")
+        if len(dumps) > 1:
+            raise ValueError(f"Multiple dump files found in {p} — specify one explicitly")
+        if not keys:
+            raise ValueError(f"No *-key.bin file found in: {p}")
+        return str(dumps[0]), str(keys[0])
+
+    if p.name.endswith('-dump.bin'):
+        key = p.parent / p.name.replace('-dump.bin', '-key.bin')
+        return str(p), str(key)
+
+    # Plain file path — caller must supply the key separately
+    return str(p), None
+
+
 def main():
     print("--------------------------------------------------------")
     print("RFID Tag Writer v0.1.0 - Bambu Research Group 2025")
@@ -63,15 +96,26 @@ def main():
     # Run setup
     setup()
 
-    if len(sys.argv) > 1:
-        tagdump = os.path.abspath(sys.argv[1])
-    else:
-        tagdump = input("Enter the path to the tag dump you wish to write: ").replace("\\ ", " ")
+    # --- Resolve tag dump and key file ---
+    # Accept: a UID directory, a *-dump.bin file, or two explicit file paths.
+    # Either relative or absolute paths are fine.
 
-    if len(sys.argv) > 2:
-        keydump = os.path.abspath(sys.argv[2])
-    else:
-        keydump = input("Enter the path to the tag's key dump you wish to write: ").replace("\\ ", " ")
+    raw1 = (os.path.abspath(sys.argv[1]) if len(sys.argv) > 1
+            else input("Enter the path to the tag dump or UID directory: ").replace("\\ ", " ").strip())
+
+    try:
+        tagdump, keydump = resolve_dump_and_key(raw1)
+    except ValueError as e:
+        print(f"Error: {e}")
+        exit(1)
+
+    if keydump is None:
+        # Auto-discovery didn't find a key — need a second path
+        keydump = (os.path.abspath(sys.argv[2]) if len(sys.argv) > 2
+                   else input("Enter the path to the key file: ").replace("\\ ", " ").strip())
+    elif len(sys.argv) > 2:
+        # Directory/dump-file auto-discovery succeeded but a second arg was also given — warn
+        print(f"Note: key file auto-detected as {keydump!r}; ignoring extra argument.")
 
     for label, path in [("Tag dump", tagdump), ("Key file", keydump)]:
         if not os.path.isfile(path):

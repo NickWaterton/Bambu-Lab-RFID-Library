@@ -14,7 +14,29 @@ For more information about Bambu Lab RFID tags and their format, see https://git
 A collection of Python scripts is included in this repository to help scan, manage, and maintain the library. All scripts require **Python 3.6 or higher**.
 
 > [!NOTE]
-> Scripts that communicate with a Proxmark3 (`scanTag.py`, `writeTag.py`) also require a Proxmark3 running the [Iceman firmware](https://github.com/RfidResearchGroup/proxmark3) (v4.21128 or higher). Set the `PROXMARK3_DIR` environment variable to your Proxmark3 installation directory (e.g. `D:\Proxmark3` on Windows).
+> Scripts that communicate with a Proxmark3 (`scanTag.py`, `writeTag.py`, `menu.py`) also require a Proxmark3 running the [Iceman firmware](https://github.com/RfidResearchGroup/proxmark3) (v4.21128 or higher). Set the `PROXMARK3_DIR` environment variable to your Proxmark3 installation directory (e.g. `D:\Proxmark3` on Windows).
+
+---
+
+### `menu.py` — Interactive menu (recommended entry point)
+
+A text-based interactive menu that brings together all the common workflows in one place. No need to remember individual script names or arguments.
+
+```
+python menu.py
+```
+
+**Menu options:**
+
+| Option | Description |
+|--------|-------------|
+| **1 — Read tag** | Poll for a tag, display all parsed fields (material, colour hex + name, variant ID, UID) and show its library location if already scanned. |
+| **2 — Scan tag to database** | Full scan-and-add workflow: reads the tag, looks up the official colour name, prompts for confirmation, and saves to the library. |
+| **3 — Write tag from database** | Browse the library by category → material → colour → UID and write the selected dump to a blank writable tag. |
+| **4 — Fix database** | Check the library for misplaced entries, wrong colour folder names, and duplicate UIDs; review and apply fixes interactively; optionally update the README. |
+| **5 — Exit** | Quit. |
+
+The colour database is loaded once at startup and shared across all operations. The Proxmark3 is auto-detected on first use.
 
 ---
 
@@ -44,10 +66,17 @@ python scanTag.py
 Writes an existing dump from the library to a blank writable RFID tag, allowing third-party spools to be recognised by Bambu Lab printers just like genuine spools.
 
 ```
-python writeTag.py [path/to/dump.bin] [path/to/key.bin]
+python writeTag.py [path/to/uid/directory | path/to/dump.bin] [path/to/key.bin]
 ```
 
 If no arguments are given the script will prompt for the paths. It displays the filament data that will be written and requires explicit confirmation before permanently write-locking the tag.
+
+**Path arguments** are flexible — you can pass:
+- A **UID directory** (e.g. `PLA/PLA Basic/Pink/47D3072A`) — the script finds the dump and key files inside automatically.
+- A **dump file** path — the key file is found alongside it automatically.
+- Both a dump file and a key file explicitly.
+
+Both relative and absolute paths are accepted.
 
 **Compatible blank tags:** Gen 2 FUID, Gen 4 FUID, Gen 4 UFUID. The script detects which type is on the reader and uses the appropriate write command.
 
@@ -63,19 +92,45 @@ python parse.py path/to/tag-dump.bin
 
 ---
 
-### `fix_library.py` — Find and fix misplaced tag folders
+### `fix_library.py` — Find and fix library issues
 
-Scans all dump files and reports entries where the folder path doesn't match the material/category recorded in the tag data. With `--fix`, moves folders to the correct location automatically.
+Scans all dump files and reports entries where the folder path doesn't match the material/category recorded in the tag data, colour folder names that don't match the official Bambu Lab name, and duplicate UIDs (the same physical tag filed in more than one location). With `--fix`, applies all approved changes automatically.
 
 ```
-python fix_library.py [library_root] [--fix] [--quarantine]
+python fix_library.py [library_root] [--fix] [--quarantine] [--no-color-check]
 ```
 
 | Flag | Effect |
 |------|--------|
-| *(none)* | Report mismatches only — nothing is moved. |
-| `--fix` | Move misplaced folders to their correct location. Stale duplicates (identical data already at the destination) are removed. |
+| *(none)* | Report all issues — nothing is moved. |
+| `--fix` | Move misplaced folders, rename wrong colour folders, and remove duplicate copies. Colour renames are presented interactively for approval before anything is changed. |
 | `--fix --quarantine` | Same as `--fix`, but entries with suspicious/corrupt tag data are moved to `_quarantine/` with a note instead of being placed in the main library. |
+| `--no-color-check` | Skip the colour folder name validation (location fixes only). |
+
+**What it checks:**
+
+- **Location mismatches** — tag filed under the wrong category or material folder (e.g. a PETG HF tag under PETG Translucent).
+- **Colour name mismatches** — colour folder name doesn't match the official Bambu Studio colour name for that hex code and material type. Cross-type tags (e.g. a "Silver" folder containing a PLA Silk+ tag when Silver is also valid for PLA Basic) are flagged with an explanatory note.
+- **Duplicate UIDs** — the same UID appears in more than one library location. The duplicate copy is reported (and removed with `--fix`).
+
+**One-pass location + colour fix:** when a tag needs both a location move *and* a colour rename, both changes are applied in a single `--fix` run. The colour rename destination is calculated relative to the post-move path, so the library is fully consistent after a single pass.
+
+---
+
+### `colordb.py` — Shared Bambu Studio colour database helper
+
+Internal module used by `menu.py`, `scanTag.py`, and `fix_library.py` to look up official colour names from the Bambu Lab filament colour database.
+
+Not normally run directly. The database is fetched live from the [BambuStudio GitHub repository](https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/filaments_color_codes.json) on each run (5-second timeout), with an automatic fallback to a locally installed Bambu Studio copy.
+
+**Key functions available to other scripts:**
+
+| Function | Description |
+|----------|-------------|
+| `load_color_database()` | Fetch/load the colour database; returns a list of entries. |
+| `lookup_color_name(tag_data, db)` | Return the official English colour name for a tag's hex colour + material type. Returns `(exact_name, candidates)` where `exact_name` is set only when both type and colour match precisely. |
+| `find_nearest_color(tag_data, db)` | Find the closest colour by Euclidean RGBA distance when no exact hex match exists. |
+| `distance_label(dist)` | Human-readable qualifier for a colour distance value. |
 
 ---
 
@@ -147,7 +202,8 @@ python scrape_filaments.py
 The best way to contribute is to scan tags and submit a Pull Request. The easiest workflow is:
 
 1. Clone this repository.
-2. Run `python scanTag.py` with a Proxmark3 attached.
+2. Run `python menu.py` with a Proxmark3 attached and choose **2 — Scan tag to database**.
+   - Alternatively, run `python scanTag.py` directly for a non-interactive scan.
 3. Present each spool — the script scans the tag, looks up the official colour name, and saves the data in the right place automatically.
 4. Commit the new files and open a Pull Request.
 
@@ -176,12 +232,12 @@ Status Icon Legend:
 | [Yellow](./PLA/PLA%20Basic/Yellow)                       | 10400         | A00-Y0/A00-Y00 | ✅     |
 | [Sunflower Yellow](./PLA/PLA%20Basic/Sunflower%20Yellow) | 10402         | A00-Y2     | ✅     |
 | [Pumpkin Orange](./PLA/PLA%20Basic/Pumpkin%20Orange)     | 10301         | A00-A1     | ✅     |
-| [Orange](./PLA/PLA%20Basic/Orange)                       | 10300         | A00-A0/A00-A00/A00-A1 | ✅     |
+| [Orange](./PLA/PLA%20Basic/Orange)                       | 10300         | A00-A0/A00-A00        | ✅     |
 | [Gold](./PLA/PLA%20Basic/Gold)                           | 10401         | A00-Y04/A00-Y4 | ✅     |
 | [Bright Green](./PLA/PLA%20Basic/Bright%20Green)         | 10503         | A00-G3     | ✅     |
 | [Bambu Green](./PLA/PLA%20Basic/Bambu%20Green)           | 10501         | A00-G06/A00-G1/A00-G6 | ✅     |
 | [Mistletoe Green](./PLA/PLA%20Basic/Mistletoe%20Green)   | 10502         | A00-G02/A00-G2 | ✅     |
-| [Pink](./PLA/PLA%20Basic/Pink)                           | 10203         | A00-A0/A00-P01/A00-P1 | ✅     |
+| [Pink](./PLA/PLA%20Basic/Pink)                           | 10203         | A00-P01/A00-P1        | ✅     |
 | [Hot Pink](./PLA/PLA%20Basic/Hot%20Pink)                 | 10204         | A00-R3     | ✅     |
 | [Magenta](./PLA/PLA%20Basic/Magenta)                     | 10202         | A00-P06/A00-P6 | ✅     |
 | [Red](./PLA/PLA%20Basic/Red)                             | 10200         | A00-R0/A00-R00 | ✅     |
@@ -197,7 +253,7 @@ Status Icon Legend:
 | [Bronze](./PLA/PLA%20Basic/Bronze)                       | 10801         | A00-Y03/A00-Y3 | ✅     |
 | [Gray](./PLA/PLA%20Basic/Gray)                           | 10103         | A00-D0/A00-D00 | ✅     |
 | [Silver](./PLA/PLA%20Basic/Silver)                       | 10102         | A00-D01/A00-D1 | ✅     |
-| [Blue Grey](./PLA/PLA%20Basic/Blue%20Grey)               | 10602         | A00-B01/A00-B1 | ✅     |
+| [Blue Grey](./PLA/PLA%20Basic/Blue%20Grey)               | 10602         | A00-B1         | ✅     |
 | [Dark Gray](./PLA/PLA%20Basic/Dark%20Gray)               | 10105         | A00-D03/A00-D3 | ✅     |
 | [Black](./PLA/PLA%20Basic/Black)                         | 10101         | A00-K0/A00-K00 | ✅     |
 
@@ -261,11 +317,11 @@ Status Icon Legend:
 
 | Color                             | Filament Code | Variant ID | Status |
 | --------------------------------- | ------------- | ---------- | ------ |
-| [Green](./PLA/PLA%20Glow/Green)   | 15500         | A12-G0     | ✅     |
-| [Pink](./PLA/PLA%20Glow/Pink)     | 15200         | A12-R0     | ✅     |
-| [Orange](./PLA/PLA%20Glow/Orange) | 15300         | A12-A0     | ✅     |
-| [Yellow](./PLA/PLA%20Glow/Yellow) | 15400         | A12-Y0     | ✅     |
-| [Blue](./PLA/PLA%20Glow/Blue)     | 15600         | A12-B0     | ✅     |
+| [Green](./PLA/PLA%20Glow/Green)   | 15500         | A12-G0     | ❌     |
+| [Pink](./PLA/PLA%20Glow/Pink)     | 15200         | A12-R0     | ❌     |
+| [Orange](./PLA/PLA%20Glow/Orange) | 15300         | A12-A0     | ❌     |
+| [Yellow](./PLA/PLA%20Glow/Yellow) | 15400         | A12-Y0     | ❌     |
+| [Blue](./PLA/PLA%20Glow/Blue)     | 15600         | A12-B0     | ❌     |
 
 #### [PLA Marble](./PLA/PLA%20Marble)
 
@@ -324,7 +380,7 @@ Status Icon Legend:
 | ------------------------------------------------ | ------------- | ---------- | ------ |
 | [Gold](./PLA/PLA%20Silk%2B/Gold)                 | 13405         | A06-Y1     | ✅     |
 | [Titan Gray](./PLA/PLA%20Silk%2B/Titan%20Gray)   | 13108         | A06-D0/A06-D00 | ✅     |
-| [Silver](./PLA/PLA%20Silk%2B/Silver)             | 13109         | A06-D00/A06-D01/A06-D1        | ✅     |
+| [Silver](./PLA/PLA%20Silk%2B/Silver)             | 13109         | A06-D01/A06-D1                | ✅     |
 | [White](./PLA/PLA%20Silk%2B/White)               | 13110         | A06-W0/A06-W00 | ✅     |
 | [Candy Red](./PLA/PLA%20Silk%2B/Candy%20Red)     | 13205         | A06-R0     | ✅     |
 | [Candy Green](./PLA/PLA%20Silk%2B/Candy%20Green) | 13506         | A06-G0/A06-G00 | ✅     |
@@ -345,11 +401,11 @@ Status Icon Legend:
 | [South Beach](./PLA/PLA%20Silk%20Multi-Color/South%20Beach)       | 13906         | A05-M1     | ✅     |
 | [Phantom Blue](./PLA/PLA%20Silk%20Multi-Color/Phantom%20Blue)     | 13916         | A05-T9     | ✅     |
 | [Mystic Magenta](./PLA/PLA%20Silk%20Multi-Color/Mystic%20Magenta) | 13913         | A05-T7     | ✅     |
-| [Neon City](./PLA/PLA%20Silk%20Multi-Color/Neon%20City)           | 13903         | A05-M4/A05-T3 | ✅     |
-| [Midnight Blaze](./PLA/PLA%20Silk%20Multi-Color/Midnight%20Blaze) | 13902         | A05-T2/A05-T3 | ✅     |
+| [Neon City](./PLA/PLA%20Silk%20Multi-Color/Neon%20City)           | 13903         | A05-T3        | ✅     |
+| [Midnight Blaze](./PLA/PLA%20Silk%20Multi-Color/Midnight%20Blaze) | 13902         | A05-T2        | ✅     |
 | [Gilded Rose](./PLA/PLA%20Silk%20Multi-Color/Gilded%20Rose)       | 13901         | A05-T1        | ✅     |
 | [Blue Hawaii](./PLA/PLA%20Silk%20Multi-Color/Blue%20Hawaii)       | 13904         | A05-T4     | ✅     |
-| [Velvet Eclipse](./PLA/PLA%20Silk%20Multi-Color/Velvet%20Eclipse) | 13905         | A05-T5     | ✅     |
+| [Velvet Eclipse](./PLA/PLA%20Silk%20Multi-Color/Velvet%20Eclipse) | 13905         | A05-T5     | ❌     |
 
 #### [PLA Galaxy](./PLA/PLA%20Galaxy)
 
@@ -449,7 +505,7 @@ Status Icon Legend:
 | [Translucent Gray](./PETG/PETG%20Translucent/Translucent%20Gray)               | 32100         | G01-D0     | ✅     |
 | [Translucent Olive](./PETG/PETG%20Translucent/Translucent%20Olive)             | 32500         | G01-G0     | ✅     |
 | [Translucent Brown](./PETG/PETG%20Translucent/Translucent%20Brown)             | 32800         | G01-N0     | ✅     |
-| [Translucent Orange](./PETG/PETG%20Translucent/Translucent%20Orange)           | 32300         | G01-A0/G02-A0 | ✅     |
+| [Translucent Orange](./PETG/PETG%20Translucent/Translucent%20Orange)           | 32300         | G01-A0        | ✅     |
 | [Translucent Pink](./PETG/PETG%20Translucent/Translucent%20Pink)               | 32200         | G01-P1     | ✅     |
 | [Translucent Purple](./PETG/PETG%20Translucent/Translucent%20Purple)           | 32700         | G01-P0     | ✅     |
 
@@ -526,8 +582,8 @@ Status Icon Legend:
 | Color                                | Filament Code | Variant ID | Status |
 | ------------------------------------ | ------------- | ---------- | ------ |
 | [Transparent](./PC/PC/Transparent)   | 60103         | C00-C1     | ✅     |
-| [Clear Black](./PC/PC/Clear%20Black) | 60102         | C00-C0/C00-C1 | ✅     |
-| [Black](./PC/PC/Black)               | 60101         | C00-K0     | ✅     |
+| [Clear Black](./PC/PC/Clear%20Black) | 60102         | C00-C1        | ✅     |
+| [Black](./PC/PC/Black)               | 60101         | C00-C0/C00-K0 | ✅     |
 | [White](./PC/PC/White)               | 60100         | C00-W0     | ✅     |
 
 #### [PC FR](./PC/PC%20FR)
@@ -536,7 +592,7 @@ Status Icon Legend:
 | --------------------------- | ------------- | ---------- | ------ |
 | [Black](./PC/PC%20FR/Black) | 63100         | C01-K0     | ✅     |
 | [White](./PC/PC%20FR/White) | 63101         | C01-W0     | ✅     |
-| [Gray](./PC/PC%20FR/Gray)   | 63102         | C01-D0     | ❌     |
+| [Gray](./PC/PC%20FR/Gray)   | 63102         | C01-D0     | ✅     |
 
 ### [TPU](./TPU)
 

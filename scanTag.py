@@ -19,8 +19,6 @@ import argparse
 import itertools
 import tempfile
 import subprocess
-import urllib.request
-import urllib.error
 from pathlib import Path
 
 from lib import get_proxmark3_location, run_command
@@ -29,6 +27,9 @@ from categories import CATEGORY_MAP, MULTI_COLOR_MATERIAL_MAP, resolve_material
 from parse import Tag
 from convert import sync_directory
 from update_readme import run as update_readme
+from colordb import (
+    load_color_database, lookup_color_name, find_nearest_color, distance_label,
+)
 
 # The library root is the directory containing this script.
 LIBRARY_ROOT = Path(__file__).parent.resolve()
@@ -172,124 +173,6 @@ def dest_dir(tag_data, color_name, library_root):
     uid      = tag_data['uid']
     return library_root / category / material / color_name / uid
 
-# ---------------------------------------------------------------------------
-# Bambu Studio colour database
-# ---------------------------------------------------------------------------
-
-# Authoritative source — maintained by Bambu Lab alongside BambuStudio releases.
-COLOR_DB_URL = (
-    "https://raw.githubusercontent.com/bambulab/BambuStudio/master"
-    "/resources/profiles/BBL/filament/filaments_color_codes.json"
-)
-
-# Local fallback — present when Bambu Studio is installed on this machine.
-COLOR_DB_LOCAL_PATHS = [
-    Path(r"C:\Program Files\Bambu Studio\resources\profiles\BBL\filament\filaments_color_codes.json"),
-    Path(r"C:\Program Files (x86)\Bambu Studio\resources\profiles\BBL\filament\filaments_color_codes.json"),
-]
-
-# Network timeout in seconds for the GitHub fetch.
-COLOR_DB_TIMEOUT = 5
-
-
-def _parse_color_db(raw):
-    """Extract the list of entries from the parsed JSON (handles {"data":[...]} wrapper)."""
-    if isinstance(raw, dict):
-        return raw.get('data', [])
-    return raw  # already a plain list
-
-
-def load_color_database():
-    """
-    Load the Bambu Studio filament colour database.
-
-    Tries GitHub first (always up to date); falls back to the locally
-    installed copy if the network is unavailable.  Returns a list of
-    colour entries, or an empty list if neither source is reachable.
-    """
-    # --- 1. Try GitHub ---
-    try:
-        req = urllib.request.Request(
-            COLOR_DB_URL,
-            headers={'User-Agent': 'scanTag/1.0 (Bambu-Research-Group)'},
-        )
-        with urllib.request.urlopen(req, timeout=COLOR_DB_TIMEOUT) as resp:
-            raw = json.loads(resp.read().decode('utf-8'))
-        entries = _parse_color_db(raw)
-        if entries:
-            print(f"Loaded colour database from GitHub ({len(entries)} entries).")
-            return entries
-    except (urllib.error.URLError, OSError, json.JSONDecodeError, KeyboardInterrupt):
-        pass  # fall through to local copy
-
-    # --- 2. Fall back to local Bambu Studio installation ---
-    for path in COLOR_DB_LOCAL_PATHS:
-        if path.exists():
-            try:
-                with open(path, encoding='utf-8') as f:
-                    raw = json.load(f)
-                entries = _parse_color_db(raw)
-                if entries:
-                    print(f"(GitHub unreachable — using local colour database, {len(entries)} entries.)")
-                    return entries
-            except Exception as e:
-                print(f"Warning: could not read local colour database at {path}: {e}")
-
-    print("(Colour database not available — colour name must be entered manually.)")
-    return []
-
-
-def lookup_color_name(tag_data, db):
-    """
-    Search the Bambu Studio colour database for entries matching this tag's
-    hex colour.
-
-    Filters by colour type (单色 / 渐变色 / 多拼色) using filament_color_count so
-    that single-colour tags never match gradient entries and vice versa.
-
-    Returns (exact_name, candidates) where:
-      exact_name  -- English name when material type AND hex both matched, else None
-      candidates  -- list of (name, fila_type) for entries where only hex matched
-    """
-    if not db:
-        return None, []
-
-    target_color = tag_data['filament_color'].upper()
-    target_type  = tag_data['detailed_filament_type']
-    is_multi     = tag_data.get('filament_color_count', 1) > 1
-
-    # fila_color_type values: 单色 = single, 渐变色 = gradient, 多拼色 = multi-splice
-    SINGLE_TYPE = '单色'
-    MULTI_TYPES = {'渐变色', '多拼色'}
-
-    exact_name = None
-    candidates = []
-
-    for entry in db:
-        # Skip entries whose colour-count class doesn't match the tag
-        entry_color_type = entry.get('fila_color_type', '')
-        if is_multi and entry_color_type not in MULTI_TYPES:
-            continue
-        if not is_multi and entry_color_type != SINGLE_TYPE:
-            continue
-
-        colors = [c.upper() for c in entry.get('fila_color', [])]
-        if target_color not in colors:
-            continue
-
-        name = entry.get('fila_color_name', {}).get('en', '').strip()
-        if not name:
-            continue
-
-        if entry.get('fila_type') == target_type:
-            if exact_name is None:      # take the first exact match
-                exact_name = name
-        else:
-            candidates.append((name, entry.get('fila_type', '?')))
-
-    return exact_name, candidates
-
-
 def prompt_color_name(tag_data, db):
     """
     Interactively ask the user for the colour name, pre-filling from the
@@ -320,7 +203,18 @@ def prompt_color_name(tag_data, db):
             for name, ftype in candidates:
                 print(f"  {name!r}  (database type: '{ftype}')")
     elif db:
-        print("(Colour not found in Bambu Studio database — enter manually.)")
+        near_name, near_hex, near_dist, near_type, near_exact_type = find_nearest_color(tag_data, db)
+        if near_name is not None:
+            label = distance_label(near_dist)
+            print(f"Nearest colour in database: {near_name!r}  "
+                  f"(database hex {near_hex}, RGB distance {near_dist:.1f})")
+            print(f"  *** WARNING: no exact hex match \u2014 {label} ***")
+            if not near_exact_type:
+                print(f"  (database type: '{near_type}', tag type:"
+                      f" '{tag_data['detailed_filament_type']}')")
+            suggested = near_name
+        else:
+            print("(Colour not found in Bambu Studio database \u2014 enter manually.)")
     else:
         print("(Bambu Studio not found — enter colour name manually.)")
 

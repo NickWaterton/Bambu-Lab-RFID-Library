@@ -37,7 +37,6 @@ MATERIAL_MAP = {
     'Support W':       ['Support for PLA-PETG'],
     'Support for PLA': ['Support for PLA (New Version)', 'Support for PLA-PETG'],
     'PETG-CF':         ['PETG CF'],
-    'PETG HF':         ['PETG Translucent'],
     'PLA Basic':       ['PLA Basic Gradient'],
     'PLA':             ['PLA Silk Multi-Color'],
 }
