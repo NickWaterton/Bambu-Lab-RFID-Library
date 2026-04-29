@@ -109,14 +109,19 @@ def get_local_uid_set():
     """
     Return a set of UIDs (uppercase hex) present anywhere in the local library,
     regardless of which folder they are currently stored under.
+    Includes UIDs that have been quarantined so they are not re-imported.
     """
     uids = set()
     for p in LIBRARY_ROOT.rglob('*'):
         if not p.is_dir():
             continue
         parts = p.relative_to(LIBRARY_ROOT).parts
+        # Normal library entry: Category/Material/Colour/UID
         if len(parts) == 4 and not parts[0].startswith('_') and _is_uid(parts[3]):
             uids.add(parts[3].upper())
+        # Quarantined entry: _quarantine/.../UID (depth varies; match by name)
+        elif parts[0] == '_quarantine' and _is_uid(parts[-1]):
+            uids.add(parts[-1].upper())
     return uids
 
 
