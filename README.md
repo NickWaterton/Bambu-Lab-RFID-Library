@@ -35,7 +35,7 @@ python menu.py
 | **3 — Write tag from database** | Browse the library by category → material → colour → UID and write the selected dump to a blank writable tag. |
 | **4 — Fix database** | Check the library for misplaced entries, wrong colour folder names, and duplicate UIDs; review and apply fixes interactively; optionally update the README. |
 | **5 — Sync from upstream** | Fetch new tag UIDs from the upstream repository ([queengooborg/Bambu-Lab-RFID-Library](https://github.com/queengooborg/Bambu-Lab-RFID-Library)), preview what's new, import with one confirmation, then optionally run Fix Database and update the README. |
-| **6 — Contribute to upstream** | Find local UIDs not yet in upstream, build a PR branch rooted on `upstream/main` (so no local naming changes bleed in), push it to your fork, and open a pull request — fully automated via the GitHub CLI. |
+| **6 — Contribute to upstream** | Find local UIDs not yet in upstream and create or update a single persistent PR (`contribute/pending`). The branch is rooted on `upstream/main` so no local naming changes bleed in. Re-run after each new scan to keep the PR current; a new PR is opened automatically once the previous one is merged or closed. |
 | **7 — Exit** | Quit. |
 
 The colour database is loaded once at startup and shared across all operations. The Proxmark3 is auto-detected on first use.
@@ -175,11 +175,11 @@ git add -A && git commit -m "Import N new tags from upstream" && git push
 
 ### `contribute_to_upstream.py` — Contribute new tag scans back to the upstream repository
 
-Finds UID directories that are in your local library but absent from the upstream repository ([queengooborg/Bambu-Lab-RFID-Library](https://github.com/queengooborg/Bambu-Lab-RFID-Library)), then creates a pull-request branch containing only those new files. The branch is rooted on `upstream/main`, so none of your local naming convention changes are included in the PR.
+Finds UID directories that are in your local library but absent from the upstream repository ([queengooborg/Bambu-Lab-RFID-Library](https://github.com/queengooborg/Bambu-Lab-RFID-Library)), then creates or updates a single persistent pull-request branch containing all those new files. The branch is rooted on `upstream/main`, so none of your local naming convention changes are included in the PR.
 
 ```
 python contribute_to_upstream.py              # fetch + preview what would be contributed
-python contribute_to_upstream.py --apply      # fetch + create PR branch and open PR
+python contribute_to_upstream.py --apply      # fetch + create/update PR branch
 python contribute_to_upstream.py --no-fetch   # preview without re-fetching
 python contribute_to_upstream.py --no-fetch --apply
 ```
@@ -192,12 +192,13 @@ python contribute_to_upstream.py --no-fetch --apply
 **What it does (with `--apply`):**
 
 1. Identifies all local UIDs not present in `upstream/main`.
-2. Creates a new local branch (e.g. `contribute/2025-04-29`) from `upstream/main` in a temporary git worktree, leaving your working tree untouched.
-3. Copies the new UID directories — all files — into the worktree.
-4. Commits and pushes the branch to your `origin` fork.
-5. Opens a pull request against `queengooborg/Bambu-Lab-RFID-Library` via `gh pr create`.
+2. Rebuilds the fixed branch `contribute/pending` from `upstream/main` in a temporary git worktree, leaving your working tree untouched.
+3. Copies all new UID directories into the worktree and commits them.
+4. Force-pushes the branch to your `origin` fork (`--force-with-lease`).
+5. **If a PR is already open** from `contribute/pending`: updates its title and body to reflect the current UID count via `gh pr edit`.  
+   **If no PR is open**: creates one against `queengooborg/Bambu-Lab-RFID-Library` via `gh pr create`.
 
-The contribution branch and remote ref persist until the PR is merged or closed. You can check PR status with:
+Run it again after scanning more tags — the open PR accumulates everything until the upstream author merges or closes it, at which point the next run opens a fresh PR.
 
 ```
 gh pr view --repo queengooborg/Bambu-Lab-RFID-Library

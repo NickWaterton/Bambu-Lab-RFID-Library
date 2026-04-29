@@ -2,13 +2,14 @@
 """
 contribute_to_upstream.py -- Contribute new local tag UIDs to the upstream repository.
 
-Compares your local library against the upstream repo and creates a pull-request
-branch containing only the UID directories that are present locally but absent
-upstream.  The branch is rooted on upstream/main, so none of your local naming
-convention changes are included.
+Compares your local library against the upstream repo and creates (or updates)
+a single persistent pull-request branch containing every UID that is present
+locally but absent upstream.  The branch is rooted on upstream/main, so none
+of your local naming convention changes are included.
 
-The branch is pushed to your origin fork and a PR is opened against the upstream
-repo using the GitHub CLI (gh).
+Each run rebuilds the branch from scratch and force-pushes it, so the open PR
+stays up to date as you scan more tags.  When the upstream author merges or
+closes the PR, the next run detects no open PR and creates a fresh one.
 
 Requirements:
     - git remote 'upstream' pointing to queengooborg/Bambu-Lab-RFID-Library
@@ -16,7 +17,7 @@ Requirements:
 
 Usage:
     python contribute_to_upstream.py              # fetch + preview
-    python contribute_to_upstream.py --apply      # fetch + create PR branch
+    python contribute_to_upstream.py --apply      # fetch + create/update PR
     python contribute_to_upstream.py --no-fetch   # preview using already-fetched data
     python contribute_to_upstream.py --no-fetch --apply
 """
@@ -26,7 +27,6 @@ import sys
 import shutil
 import subprocess
 import argparse
-import datetime
 import tempfile
 from pathlib import Path
 
@@ -42,8 +42,9 @@ from sync_from_upstream import (
 # Configuration
 # ---------------------------------------------------------------------------
 
-ORIGIN_REMOTE = 'origin'
-UPSTREAM_REPO = 'queengooborg/Bambu-Lab-RFID-Library'
+ORIGIN_REMOTE       = 'origin'
+UPSTREAM_REPO       = 'queengooborg/Bambu-Lab-RFID-Library'
+CONTRIBUTION_BRANCH = 'contribute/pending'   # single persistent PR branch
 
 # ---------------------------------------------------------------------------
 # Local library scan
@@ -98,58 +99,51 @@ def get_origin_owner():
     m = re.search(r'[:/]([^/]+)/[^/]+(?:\.git)?$', url)
     return m.group(1) if m else None
 
-# ---------------------------------------------------------------------------
-# Branch helpers
-# ---------------------------------------------------------------------------
 
-def _unique_branch_name(base):
+def get_open_pr_url(owner):
     """
-    Return base if no local or remote branch with that name exists.
-    Otherwise append -2, -3, ... until a free name is found.
+    Return the URL of the currently open PR from owner:CONTRIBUTION_BRANCH,
+    or None if no such PR exists.
     """
-    existing_local  = set(_git('branch', '--list').split())
-    existing_remote = set(_git('branch', '-r', '--list').split())
-    name = base
-    n = 2
-    while name in existing_local or f'{ORIGIN_REMOTE}/{name}' in existing_remote:
-        name = f'{base}-{n}'
-        n += 1
-    return name
-
-
-def _pr_exists_for_branch(branch_name, owner):
-    """Return True if a PR is already open from owner:branch_name."""
     result = subprocess.run(
         ['gh', 'pr', 'list',
          '--repo', UPSTREAM_REPO,
-         '--head', f'{owner}:{branch_name}',
-         '--json', 'number'],
+         '--head', f'{owner}:{CONTRIBUTION_BRANCH}',
+         '--json', 'url',
+         '--jq', '.[0].url'],
         capture_output=True,
         cwd=str(LIBRARY_ROOT),
     )
     if result.returncode != 0:
-        return False
-    out = result.stdout.decode('utf-8', errors='replace').strip()
-    return out not in ('', '[]', 'null')
+        return None
+    url = result.stdout.decode('utf-8', errors='replace').strip()
+    return url if url and url != 'null' else None
 
 # ---------------------------------------------------------------------------
 # Core: build contribution branch in a temporary worktree
 # ---------------------------------------------------------------------------
 
-def build_contribution_branch(branch_name, uid_dirs):
+def build_contribution_branch(uid_dirs):
     """
-    Create a local branch from UPSTREAM_REF, add a temporary worktree,
-    copy all UID directories into it, and commit.
+    (Re)create CONTRIBUTION_BRANCH from UPSTREAM_REF in a temporary worktree,
+    copy all uid_dirs into it, and commit.
+
+    Any existing local branch with that name is deleted first so the branch is
+    always a clean rebuild from upstream/main.
 
     Returns the Path of the worktree (caller must clean it up).
     Raises on any git/IO error (cleans up before raising).
     """
-    # Create the local branch
-    _git('branch', branch_name, UPSTREAM_REF)
+    # Delete stale local branch if present
+    existing = _git('branch', '--list', CONTRIBUTION_BRANCH).strip()
+    if existing:
+        _git('branch', '-D', CONTRIBUTION_BRANCH)
+
+    _git('branch', CONTRIBUTION_BRANCH, UPSTREAM_REF)
 
     worktree_dir = Path(tempfile.mkdtemp(prefix='bambu-contribute-'))
     try:
-        _git('worktree', 'add', str(worktree_dir), branch_name)
+        _git('worktree', 'add', str(worktree_dir), CONTRIBUTION_BRANCH)
 
         # Copy each UID directory
         for uid, local_uid_dir in sorted(uid_dirs.items(),
@@ -188,7 +182,7 @@ def build_contribution_branch(branch_name, uid_dirs):
             pass
         shutil.rmtree(str(worktree_dir), ignore_errors=True)
         try:
-            _git('branch', '-D', branch_name)
+            _git('branch', '-D', CONTRIBUTION_BRANCH)
         except Exception:
             pass
         raise
@@ -196,22 +190,23 @@ def build_contribution_branch(branch_name, uid_dirs):
     return worktree_dir
 
 
-def push_branch_and_open_pr(branch_name, worktree_dir, uid_dirs, owner):
+def push_and_sync_pr(worktree_dir, uid_dirs, owner):
     """
-    Push the contribution branch to origin and open a PR against upstream.
+    Force-push CONTRIBUTION_BRANCH to origin, then either open a new PR or
+    update the title/body of the existing one.
     Always removes the worktree when done (success or failure).
     """
     try:
-        print(f"Pushing branch '{branch_name}' to {ORIGIN_REMOTE}...")
+        print(f"Pushing branch '{CONTRIBUTION_BRANCH}' to {ORIGIN_REMOTE} ...")
+        # --force-with-lease is safe: refuses if someone else pushed since we last fetched
         subprocess.run(
-            ['git', 'push', ORIGIN_REMOTE, branch_name],
+            ['git', 'push', '--force-with-lease', ORIGIN_REMOTE, CONTRIBUTION_BRANCH],
             cwd=str(LIBRARY_ROOT),
             check=True,
         )
 
         n_uids = len(uid_dirs)
         pr_title = f"Add {n_uids} new tag scan(s)"
-
         uid_list_md = ''.join(f'- `{uid}`\n' for uid in sorted(uid_dirs))
         pr_body = (
             f"## New tag scans\n\n"
@@ -223,15 +218,28 @@ def push_branch_and_open_pr(branch_name, worktree_dir, uid_dirs, owner):
             f"(https://github.com/{owner}/Bambu-Lab-RFID-Library)_\n"
         )
 
-        print(f"Opening PR against {UPSTREAM_REPO}...")
-        url = _gh(
-            'pr', 'create',
-            '--repo',  UPSTREAM_REPO,
-            '--head',  f'{owner}:{branch_name}',
-            '--title', pr_title,
-            '--body',  pr_body,
-        ).strip()
-        print(f"PR created: {url}")
+        existing_url = get_open_pr_url(owner)
+        if existing_url:
+            # Update the existing PR's title and body to reflect the new count/list
+            print(f"Updating existing PR ...")
+            _gh(
+                'pr', 'edit', existing_url,
+                '--repo',  UPSTREAM_REPO,
+                '--title', pr_title,
+                '--body',  pr_body,
+                capture=False,
+            )
+            print(f"PR updated: {existing_url}")
+        else:
+            print(f"Opening PR against {UPSTREAM_REPO} ...")
+            url = _gh(
+                'pr', 'create',
+                '--repo',  UPSTREAM_REPO,
+                '--head',  f'{owner}:{CONTRIBUTION_BRANCH}',
+                '--title', pr_title,
+                '--body',  pr_body,
+            ).strip()
+            print(f"PR created: {url}")
 
     finally:
         try:
@@ -250,7 +258,7 @@ def main():
     )
     parser.add_argument(
         '--apply', action='store_true',
-        help='Actually create the PR branch (default: preview only).',
+        help='Actually create/update the PR branch (default: preview only).',
     )
     parser.add_argument(
         '--no-fetch', action='store_true',
@@ -292,7 +300,7 @@ def main():
 
     if not args.apply:
         print()
-        print("Preview only -- run with --apply to create the PR branch.")
+        print("Preview only -- run with --apply to create/update the PR branch.")
         print()
         print("Prerequisites:")
         print("  - GitHub CLI installed:   https://cli.github.com/")
@@ -311,26 +319,14 @@ def main():
         print("\nERROR: Could not determine GitHub username from origin remote URL.")
         sys.exit(1)
 
-    date_str = datetime.date.today().strftime('%Y-%m-%d')
-    branch_base = f'contribute/{date_str}'
-    branch_name = _unique_branch_name(branch_base)
-
-    if branch_name != branch_base:
-        print(f"\nNote: branch '{branch_base}' already exists; using '{branch_name}'.")
-
-    # Check for an already-open PR (e.g. double-run)
-    if _pr_exists_for_branch(branch_name, owner):
-        print(f"\nA PR from '{owner}:{branch_name}' is already open against {UPSTREAM_REPO}.")
-        print("Nothing to do.")
-        return
-
-    print(f"\nBuilding branch '{branch_name}' from {UPSTREAM_REF} ...")
-    worktree_dir = build_contribution_branch(branch_name, to_contribute)
-    push_branch_and_open_pr(branch_name, worktree_dir, to_contribute, owner)
+    print(f"\nBuilding branch '{CONTRIBUTION_BRANCH}' from {UPSTREAM_REF} ...")
+    worktree_dir = build_contribution_branch(to_contribute)
+    push_and_sync_pr(worktree_dir, to_contribute, owner)
 
     print()
-    print(f"Done!  Branch '{branch_name}' is on origin until the PR is merged/closed.")
-    print("You can view or manage the PR with:")
+    print(f"Branch '{CONTRIBUTION_BRANCH}' on origin will be updated each run")
+    print("until the PR is merged or closed, then a new PR will be opened.")
+    print("View/manage the PR:")
     print(f"  gh pr view --repo {UPSTREAM_REPO}")
 
 
