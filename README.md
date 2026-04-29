@@ -267,7 +267,10 @@ The best way to contribute is to scan tags and submit a Pull Request. The easies
 2. Run `python menu.py` with a Proxmark3 attached and choose **2 — Scan tag to database**.
    - Alternatively, run `python scanTag.py` directly for a non-interactive scan.
 3. Present each spool — the script scans the tag, looks up the official colour name, and saves the data in the right place automatically.
-4. Commit the new files and open a Pull Request.
+4. Run `python menu.py` and choose **6 — Contribute to upstream** (or run `python contribute_to_upstream.py --apply` directly).
+   - This creates or updates a single persistent PR branch (`contribute/pending`) rooted on `upstream/main`, then opens or updates a pull request against this repository automatically via the GitHub CLI.
+   - Run it again after scanning more spools — the PR accumulates all your un-merged tags in one place. A new PR is opened automatically once the previous one is merged or closed.
+   - Requires the [GitHub CLI](https://cli.github.com/) (`gh auth login`).
 
 Not sure how to set up a Proxmark3? See the [Bambu Lab RFID Tag Guide](https://github.com/NickWaterton/Bambu-Lab-RFID-Tag-Guide/blob/main/docs/ReadTags.md) for detailed instructions.
 
