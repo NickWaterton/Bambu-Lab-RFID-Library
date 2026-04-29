@@ -32,6 +32,7 @@ import scanTag
 import writeTag
 import fix_library
 import sync_from_upstream
+import contribute_to_upstream
 
 # ---------------------------------------------------------------------------
 # Session-level state (initialised once at startup)
@@ -625,6 +626,116 @@ def menu_sync_upstream():
 
 
 # ---------------------------------------------------------------------------
+# Option 6 — Contribute new local UIDs to the upstream repository
+# ---------------------------------------------------------------------------
+
+def menu_contribute_upstream():
+    _clear()
+    _banner("Contribute to Upstream")
+
+    print("Finds tag UIDs that are in your library but not in upstream:")
+    print("  https://github.com/queengooborg/Bambu-Lab-RFID-Library")
+    print()
+    print("Creates a PR branch rooted on upstream/main so none of your")
+    print("local naming convention changes are included.")
+    print()
+    print("Requires the GitHub CLI (gh) to be installed and authenticated.")
+    print("  Install: https://cli.github.com/")
+    print("  Auth:    gh auth login")
+    print()
+
+    skip_fetch = input("Skip git fetch (use already-fetched data)? (y/N) ").strip().lower() \
+                 in ('y', 'yes')
+    print()
+
+    try:
+        sync_from_upstream.ensure_upstream_remote()
+        if not skip_fetch:
+            sync_from_upstream.fetch_upstream()
+    except SystemExit:
+        print("\nFailed -- could not configure or fetch upstream remote.")
+        _pause()
+        return
+
+    print()
+    print("Scanning upstream...", end=' ', flush=True)
+    upstream_map = sync_from_upstream.get_upstream_uid_map()
+    print(f"{len(upstream_map)} UIDs.")
+
+    print("Scanning local library...", end=' ', flush=True)
+    local_uid_map = contribute_to_upstream.get_local_uid_map()
+    print(f"{len(local_uid_map)} UIDs.")
+
+    to_contribute = {uid: path for uid, path in local_uid_map.items()
+                     if uid not in upstream_map}
+
+    if not to_contribute:
+        print("\nNothing to contribute -- all local UIDs are already in upstream.")
+        _pause()
+        return
+
+    path_str_map = {uid: p.relative_to(LIBRARY_ROOT).as_posix()
+                    for uid, p in to_contribute.items()}
+    groups = sync_from_upstream._group_by_material(path_str_map)
+    print(f"\n{len(to_contribute)} UID(s) to contribute across {len(groups)} material group(s):\n")
+    for mat_key in sorted(groups):
+        entries = groups[mat_key]
+        print(f"  {mat_key}/  ({len(entries)} UID(s))")
+        for colour, uid in sorted(entries):
+            print(f"    {colour}/{uid}")
+
+    # Check prerequisites before asking to proceed
+    if not contribute_to_upstream.check_gh_available():
+        print()
+        print("ERROR: GitHub CLI (gh) is not installed or not authenticated.")
+        print("  Install: https://cli.github.com/")
+        print("  Then:    gh auth login")
+        _pause()
+        return
+
+    owner = contribute_to_upstream.get_origin_owner()
+    if not owner:
+        print("\nERROR: Could not determine GitHub username from origin remote URL.")
+        _pause()
+        return
+
+    import datetime
+    date_str  = datetime.date.today().strftime('%Y-%m-%d')
+    branch_base = f'contribute/{date_str}'
+    branch_name = contribute_to_upstream._unique_branch_name(branch_base)
+
+    if contribute_to_upstream._pr_exists_for_branch(branch_name, owner):
+        print(f"\nA PR from '{owner}:{branch_name}' is already open against upstream.")
+        print("Nothing to do.")
+        _pause()
+        return
+
+    print()
+    confirm = input(f"Open PR with {len(to_contribute)} new UID(s)? (y/N) ").strip().lower()
+    if confirm not in ('y', 'yes'):
+        print("No changes made.")
+        _pause()
+        return
+
+    print(f"\nBuilding branch '{branch_name}' from {sync_from_upstream.UPSTREAM_REF} ...")
+    try:
+        worktree_dir = contribute_to_upstream.build_contribution_branch(
+            branch_name, to_contribute)
+        contribute_to_upstream.push_branch_and_open_pr(
+            branch_name, worktree_dir, to_contribute, owner)
+    except Exception as e:
+        print(f"\nERROR: {e}")
+        _pause()
+        return
+
+    print()
+    print(f"Done!  Branch '{branch_name}' is on origin until the PR is merged/closed.")
+    print(f"View with:  gh pr view --repo {contribute_to_upstream.UPSTREAM_REPO}")
+
+    _pause()
+
+
+# ---------------------------------------------------------------------------
 # Main menu loop
 # ---------------------------------------------------------------------------
 
@@ -634,6 +745,7 @@ MENU_OPTIONS = [
     ("Write tag from database", menu_write_tag),
     ("Fix database",           menu_fix_database),
     ("Sync from upstream",     menu_sync_upstream),
+    ("Contribute to upstream", menu_contribute_upstream),
     ("Exit",                   None),
 ]
 
