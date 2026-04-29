@@ -29,6 +29,7 @@ import subprocess
 import argparse
 import tempfile
 from pathlib import Path
+from urllib.parse import quote as url_quote
 
 from sync_from_upstream import (
     LIBRARY_ROOT, UPSTREAM_REMOTE, UPSTREAM_URL, UPSTREAM_REF,
@@ -123,6 +124,134 @@ def get_open_pr_url(owner):
     return url if url and url != 'null' else None
 
 # ---------------------------------------------------------------------------
+# README update helpers
+# ---------------------------------------------------------------------------
+
+def _url_path(parts):
+    """URL-encode a sequence of path parts and join with '/'."""
+    return '/'.join(url_quote(p, safe='') for p in parts)
+
+
+def _read_dump(uid_dir):
+    """Return parsed tag data dict from the first dump file in uid_dir, or None."""
+    from parse import Tag
+    dump_files = list(uid_dir.glob('*-dump.bin'))
+    if not dump_files:
+        dump_files = [f for f in uid_dir.glob('*.bin')
+                      if not f.name.endswith('-key.bin')]
+    if not dump_files:
+        return None
+    try:
+        with open(dump_files[0], 'rb') as fh:
+            tag = Tag(dump_files[0].name, fh.read(), fail_on_warn=False)
+        return tag.data
+    except Exception:
+        return None
+
+
+def _colour_in_readme(content, cat, mat, colour):
+    """Return True if the README has any link pointing to this colour folder."""
+    plain   = f'./{cat}/{mat}/{colour})'
+    encoded = f'./{_url_path([cat, mat, colour])})'
+    return plain in content or encoded in content
+
+
+def _find_table_insert_point(lines, cat, mat):
+    """
+    Locate the last data row of the material's table in the README.
+    Returns the line index to insert after, or None if the section is not found.
+    Data rows are identified by starting with '|' and containing '[' (a markdown link).
+    """
+    mat_encoded = _url_path([cat, mat])
+    mat_plain   = f'{cat}/{mat}'
+
+    # Find the section heading that references this material
+    section_idx = None
+    for i, line in enumerate(lines):
+        if line.startswith('#') and (mat_encoded in line or mat_plain in line):
+            section_idx = i
+            break
+    if section_idx is None:
+        return None
+
+    heading_depth = len(lines[section_idx]) - len(lines[section_idx].lstrip('#'))
+    last_data_row = None
+
+    for i in range(section_idx + 1, len(lines)):
+        stripped = lines[i].strip()
+        # Stop at the next heading of equal or higher level
+        if stripped.startswith('#'):
+            depth = len(stripped) - len(stripped.lstrip('#'))
+            if depth <= heading_depth:
+                break
+        # A data row contains a markdown link inside a table cell
+        if stripped.startswith('|') and '[' in stripped:
+            last_data_row = i
+
+    return last_data_row
+
+
+def update_upstream_readme(worktree_dir, uid_dirs):
+    """
+    Update the upstream README.md inside the worktree:
+
+    Step 1 — run update_readme against the worktree to flip any existing ❌ rows
+             to ✅ and fill in variant IDs for colours we just added.
+    Step 2 — for colours that have no README row at all (brand-new releases),
+             parse the dump and insert a new row at the end of the right table.
+             The Filament Code column is left as '?' for the upstream maintainer
+             to fill in; the variant ID comes from the tag itself.
+    """
+    import update_readme as _ur
+
+    readme_path = worktree_dir / 'README.md'
+    if not readme_path.exists():
+        print("  WARNING: README.md not found in worktree -- skipping README update.")
+        return
+
+    # Step 1: update existing ❌ rows → ✅ and fill variant IDs
+    n_changed = _ur.run(worktree_dir, dry_run=False)
+    if n_changed:
+        print(f"  Updated {n_changed} existing README row(s) to checkmark.")
+
+    # Re-read the (possibly modified) file
+    with open(readme_path, 'r', encoding='utf-8') as fh:
+        lines = fh.readlines()
+    content = ''.join(lines)
+
+    # Step 2: insert rows for colours with no existing README entry
+    rows_added = 0
+    for uid, local_uid_dir in sorted(uid_dirs.items(), key=lambda kv: str(kv[1])):
+        rel_parts = local_uid_dir.relative_to(LIBRARY_ROOT).parts
+        cat, mat, colour = rel_parts[0], rel_parts[1], rel_parts[2]
+
+        if _colour_in_readme(content, cat, mat, colour):
+            continue  # already handled in step 1 or was already ✅
+
+        # Parse tag data for the variant ID
+        uid_dir_in_wt = worktree_dir / cat / mat / colour / rel_parts[3]
+        tag_data   = _read_dump(uid_dir_in_wt)
+        variant_id = str(tag_data.get('variant_id', '?')).strip() if tag_data else '?'
+
+        colour_link = f'[{colour}](./{_url_path([cat, mat, colour])})'
+        new_row     = f'| {colour_link} | ? | {variant_id} | ✅ |\n'
+
+        insert_at = _find_table_insert_point(lines, cat, mat)
+        if insert_at is not None:
+            lines.insert(insert_at + 1, new_row)
+            content = ''.join(lines)   # keep in sync for subsequent iterations
+            print(f"  Added README row: {cat}/{mat}/{colour}  (variant: {variant_id})")
+            rows_added += 1
+        else:
+            print(f"  WARNING: no README section found for '{cat}/{mat}' -- "
+                  f"add a row for '{colour}' manually.")
+
+    if rows_added:
+        with open(readme_path, 'w', encoding='utf-8') as fh:
+            fh.writelines(lines)
+
+
+# ---------------------------------------------------------------------------
 # Core: build contribution branch in a temporary worktree
 # ---------------------------------------------------------------------------
 
@@ -161,14 +290,18 @@ def build_contribution_branch(uid_dirs):
                     n_files += 1
             print(f"  {rel.as_posix()}/  ({n_files} file(s))")
 
-        # Stage all additions
+        # Update the upstream README to reflect the new tags
+        print("Updating upstream README.md ...")
+        update_upstream_readme(worktree_dir, uid_dirs)
+
+        # Stage all additions (UID files + README changes)
         subprocess.run(['git', 'add', '-A'], cwd=str(worktree_dir), check=True)
 
         # Build commit message
         n_uids = len(uid_dirs)
         uid_lines = ''.join(f'  - {uid}\n' for uid in sorted(uid_dirs))
         commit_msg = (
-            f"Add {n_uids} new tag scan(s)\n\n"
+            f"Add {n_uids} new tag scan(s); update README\n\n"
             f"UIDs:\n{uid_lines}"
         )
         subprocess.run(
