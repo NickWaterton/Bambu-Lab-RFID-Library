@@ -14,6 +14,7 @@ CATEGORY_MAP = {
     'ABS-GF':   'ABS',
     'PLA-CF':   'PLA',
     'PA-CF':    'PA',
+    'PA-GF':    'PA',
     'ASA-CF':   'ASA',
     'ASA Aero': 'ASA',
 }

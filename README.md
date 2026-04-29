@@ -625,7 +625,7 @@ Status Icon Legend:
 | [Yellow](./PA/PA6-GF/Yellow) | 72400         | ?          | ❌     |
 | [Lime](./PA/PA6-GF/Lime)     | 72500         | ?          | ❌     |
 | [Brown](./PA/PA6-GF/Brown)   | 72800         | ?          | ❌     |
-| [White](./PA/PA6-GF/White)   | 72102         | ?          | ❌     |
+| [White](./PA/PA6-GF/White)   | 72102         | N08-D0     | ✅     |
 | [Gray](./PA/PA6-GF/Gray)     | 72103         | ?          | ❌     |
 | [Black](./PA/PA6-GF/Black)   | 72104         | N08-K0     | ✅     |
 
