@@ -24,6 +24,12 @@ COLOR_DB_LOCAL_PATHS = [
     Path(r"C:\Program Files (x86)\Bambu Studio\resources\profiles\BBL\filament\filaments_color_codes.json"),
 ]
 
+# Bundled fallback — committed alongside this script; updated automatically
+# whenever a successful GitHub fetch is made.  Ensures the database is always
+# available even if the GitHub URL moves or the network is unreachable and
+# Bambu Studio is not installed.
+BUNDLED_DB_PATH = Path(__file__).parent.resolve() / 'filaments_color_codes.json'
+
 # Network timeout in seconds for the GitHub fetch.
 COLOR_DB_TIMEOUT = 5
 
@@ -63,13 +69,19 @@ def load_color_database(silent=False):
             headers={'User-Agent': 'BambuRFIDTools/1.0 (Bambu-Research-Group)'},
         )
         with urllib.request.urlopen(req, timeout=COLOR_DB_TIMEOUT) as resp:
-            raw = json.loads(resp.read().decode('utf-8'))
+            data = resp.read()
+        raw = json.loads(data.decode('utf-8'))
         entries = _parse_color_db(raw)
         if entries:
             _msg(f"Loaded colour database from GitHub ({len(entries)} entries).")
+            # Refresh the bundled fallback so it stays current.
+            try:
+                BUNDLED_DB_PATH.write_bytes(data)
+            except OSError:
+                pass
             return entries
     except (urllib.error.URLError, OSError, json.JSONDecodeError, KeyboardInterrupt):
-        pass  # fall through to local copy
+        pass  # fall through to local copies
 
     # --- 2. Fall back to local Bambu Studio installation ---
     for path in COLOR_DB_LOCAL_PATHS:
@@ -79,12 +91,26 @@ def load_color_database(silent=False):
                     raw = json.load(f)
                 entries = _parse_color_db(raw)
                 if entries:
-                    _msg(f"(GitHub unreachable — using local colour database, {len(entries)} entries.)")
+                    _msg(f"(GitHub unreachable — using local Bambu Studio colour database, {len(entries)} entries.)")
                     return entries
             except Exception as e:
                 _msg(f"Warning: could not read local colour database at {path}: {e}")
 
-    _msg("(Colour database not available — colour name must be entered manually.)")
+    # --- 3. Fall back to bundled copy shipped with the library ---
+    if BUNDLED_DB_PATH.exists():
+        try:
+            with open(BUNDLED_DB_PATH, encoding='utf-8') as f:
+                raw = json.load(f)
+            entries = _parse_color_db(raw)
+            if entries:
+                _msg(f"Warning: GitHub unreachable and Bambu Studio not found.")
+                _msg(f"  Using bundled colour database ({len(entries)} entries).")
+                _msg(f"  This may be out of date. Update by running with network access.")
+                return entries
+        except Exception as e:
+            _msg(f"Warning: could not read bundled colour database: {e}")
+
+    _msg("Warning: colour database not available — colour name must be entered manually.")
     return []
 
 # ---------------------------------------------------------------------------
