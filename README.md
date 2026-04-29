@@ -34,7 +34,8 @@ python menu.py
 | **2 — Scan tag to database** | Full scan-and-add workflow: reads the tag, looks up the official colour name, prompts for confirmation, and saves to the library. |
 | **3 — Write tag from database** | Browse the library by category → material → colour → UID and write the selected dump to a blank writable tag. |
 | **4 — Fix database** | Check the library for misplaced entries, wrong colour folder names, and duplicate UIDs; review and apply fixes interactively; optionally update the README. |
-| **5 — Exit** | Quit. |
+| **5 — Sync from upstream** | Fetch new tag UIDs from the upstream repository ([queengooborg/Bambu-Lab-RFID-Library](https://github.com/queengooborg/Bambu-Lab-RFID-Library)), preview what's new, import with one confirmation, then optionally run Fix Database and update the README. |
+| **6 — Exit** | Quit. |
 
 The colour database is loaded once at startup and shared across all operations. The Proxmark3 is auto-detected on first use.
 
