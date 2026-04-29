@@ -4,7 +4,9 @@
 # Add --quarantine to move suspicious entries to _quarantine/ instead of their expected location.
 # Usage: python fix_library.py [library_root] [--fix] [--quarantine] [--no-color-check]
 
+import os
 import sys
+import stat
 import shutil
 import argparse
 from pathlib import Path
@@ -271,6 +273,11 @@ def apply_fixes(library_root, mismatches, quarantine=False, approved_colour_rena
                     continue
                 dst.mkdir(parents=True, exist_ok=True)
                 for item in src.iterdir():
+                    # Clear read-only flag before moving (git sets R/O on Windows)
+                    try:
+                        os.chmod(item, stat.S_IWRITE | stat.S_IREAD)
+                    except OSError:
+                        pass
                     shutil.move(str(item), str(dst / item.name))
                 src.rmdir()
                 (dst / "_quarantine.txt").write_text(
