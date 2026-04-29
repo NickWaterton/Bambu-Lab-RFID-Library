@@ -31,6 +31,7 @@ from update_readme import run as update_readme
 import scanTag
 import writeTag
 import fix_library
+import sync_from_upstream
 
 # ---------------------------------------------------------------------------
 # Session-level state (initialised once at startup)
@@ -532,6 +533,98 @@ def menu_fix_database():
 
 
 # ---------------------------------------------------------------------------
+# Option 5 — Sync new UIDs from upstream repository
+# ---------------------------------------------------------------------------
+
+def menu_sync_upstream():
+    _clear()
+    _banner("Sync from Upstream")
+
+    print("Imports new tag UIDs from the upstream repository:")
+    print("  https://github.com/queengooborg/Bambu-Lab-RFID-Library")
+    print()
+    print("New UIDs are copied to the local library at their upstream paths.")
+    print("Run Fix Database afterwards to move them to the correct locations.")
+    print()
+
+    skip_fetch = input("Skip git fetch (use already-fetched data)? (y/N) ").strip().lower() \
+                 in ('y', 'yes')
+    print()
+
+    try:
+        sync_from_upstream.ensure_upstream_remote()
+        if not skip_fetch:
+            sync_from_upstream.fetch_upstream()
+    except SystemExit:
+        print("\nFailed — could not configure or fetch upstream remote.")
+        _pause()
+        return
+
+    print()
+    print("Scanning upstream...", end=' ', flush=True)
+    upstream_map = sync_from_upstream.get_upstream_uid_map()
+    print(f"{len(upstream_map)} UIDs.")
+
+    print("Scanning local library...", end=' ', flush=True)
+    local_uids = sync_from_upstream.get_local_uid_set()
+    print(f"{len(local_uids)} UIDs.")
+
+    new_uid_map = {uid: path for uid, path in upstream_map.items()
+                   if uid not in local_uids}
+
+    if not new_uid_map:
+        print("\nNothing to import -- library already has all upstream UIDs.")
+        _pause()
+        return
+
+    groups = sync_from_upstream._group_by_material(new_uid_map)
+    print(f"\n{len(new_uid_map)} new UID(s) across {len(groups)} material group(s):\n")
+    for mat_key in sorted(groups):
+        entries = groups[mat_key]
+        print(f"  {mat_key}/  ({len(entries)} UID(s))")
+        for colour, uid in sorted(entries):
+            print(f"    {colour}/{uid}")
+
+    print()
+    confirm = input(f"Import {len(new_uid_map)} new UID(s)? (y/N) ").strip().lower()
+    if confirm not in ('y', 'yes'):
+        print("No changes made.")
+        _pause()
+        return
+
+    print("\nImporting...")
+    total_uids = total_files = 0
+    for uid, uid_path in sorted(new_uid_map.items(), key=lambda x: x[1]):
+        n_written, n_skipped = sync_from_upstream.import_uid_files(uid_path, dry_run=False)
+        status = f"{n_written} file(s) written"
+        if n_skipped:
+            status += f", {n_skipped} already present"
+        print(f"  {uid_path}/ -- {status}")
+        total_uids += 1
+        total_files += n_written
+
+    print(f"\nImported {total_uids} UID(s), {total_files} file(s).")
+
+    if total_files:
+        print()
+        confirm = input("Run Fix Database to correct any location/name issues? (y/N) ").strip().lower()
+        if confirm in ('y', 'yes'):
+            # menu_fix_database clears the screen, handles its own _pause(), and
+            # offers to update the README, so we return immediately after it.
+            menu_fix_database()
+            return
+
+    # If the user skipped fix_library, still offer a README update.
+    print()
+    confirm = input("Update README.md? (y/N) ").strip().lower()
+    if confirm in ('y', 'yes'):
+        update_readme(LIBRARY_ROOT)
+        print("README.md updated.")
+
+    _pause()
+
+
+# ---------------------------------------------------------------------------
 # Main menu loop
 # ---------------------------------------------------------------------------
 
@@ -540,6 +633,7 @@ MENU_OPTIONS = [
     ("Scan tag to database",   menu_scan_tag),
     ("Write tag from database", menu_write_tag),
     ("Fix database",           menu_fix_database),
+    ("Sync from upstream",     menu_sync_upstream),
     ("Exit",                   None),
 ]
 
