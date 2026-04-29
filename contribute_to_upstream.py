@@ -108,20 +108,31 @@ def get_open_pr_url(owner):
     """
     Return the URL of the currently open PR from owner:CONTRIBUTION_BRANCH,
     or None if no such PR exists.
+
+    Fetches all open PRs as JSON and filters in Python on headLabel
+    ("owner:branch") to avoid jq/gh-version compatibility issues.
     """
-    result = subprocess.run(
-        ['gh', 'pr', 'list',
-         '--repo', UPSTREAM_REPO,
-         '--head', f'{owner}:{CONTRIBUTION_BRANCH}',
-         '--json', 'url',
-         '--jq', '.[0].url'],
-        capture_output=True,
-        cwd=str(LIBRARY_ROOT),
-    )
-    if result.returncode != 0:
+    import json as _json
+    try:
+        result = subprocess.run(
+            ['gh', 'pr', 'list',
+             '--repo', UPSTREAM_REPO,
+             '--state', 'open',
+             '--limit', '100',
+             '--json', 'url,headLabel'],
+            capture_output=True,
+            cwd=str(LIBRARY_ROOT),
+        )
+        if result.returncode != 0:
+            return None
+        prs = _json.loads(result.stdout.decode('utf-8', errors='replace'))
+        target = f'{owner}:{CONTRIBUTION_BRANCH}'
+        for pr in prs:
+            if pr.get('headLabel') == target:
+                return pr['url']
         return None
-    url = result.stdout.decode('utf-8', errors='replace').strip()
-    return url if url and url != 'null' else None
+    except Exception:
+        return None
 
 # ---------------------------------------------------------------------------
 # README update helpers
