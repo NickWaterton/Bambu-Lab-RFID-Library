@@ -89,8 +89,11 @@ def _gh(*args, capture=True, check=True):
 
 def check_gh_available():
     """Return True if gh CLI is installed and the user is authenticated."""
-    result = subprocess.run(['gh', 'auth', 'status'], capture_output=True)
-    return result.returncode == 0
+    try:
+        result = subprocess.run(['gh', 'auth', 'status'], capture_output=True)
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
 
 
 def get_origin_owner():
