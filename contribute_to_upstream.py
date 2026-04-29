@@ -109,8 +109,8 @@ def get_open_pr_url(owner):
     Return the URL of the currently open PR from owner:CONTRIBUTION_BRANCH,
     or None if no such PR exists.
 
-    Fetches all open PRs as JSON and filters in Python on headLabel
-    ("owner:branch") to avoid jq/gh-version compatibility issues.
+    Uses headRefName + headRepositoryOwner — both are valid gh pr list --json
+    fields.  headLabel is NOT available in gh pr list (only in gh pr view).
     """
     import json as _json
     try:
@@ -119,16 +119,17 @@ def get_open_pr_url(owner):
              '--repo', UPSTREAM_REPO,
              '--state', 'open',
              '--limit', '100',
-             '--json', 'url,headLabel'],
+             '--json', 'url,headRefName,headRepositoryOwner'],
             capture_output=True,
             cwd=str(LIBRARY_ROOT),
         )
         if result.returncode != 0:
             return None
         prs = _json.loads(result.stdout.decode('utf-8', errors='replace'))
-        target = f'{owner}:{CONTRIBUTION_BRANCH}'
         for pr in prs:
-            if pr.get('headLabel') == target:
+            ref        = pr.get('headRefName', '')
+            pr_owner   = pr.get('headRepositoryOwner', {}).get('login', '')
+            if ref == CONTRIBUTION_BRANCH and pr_owner.lower() == owner.lower():
                 return pr['url']
         return None
     except Exception:
