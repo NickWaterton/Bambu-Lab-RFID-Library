@@ -147,9 +147,33 @@ python library_checker.py [--color_list] [--dump_colors]
 
 ---
 
+### `sync_from_upstream.py` — Import new tags from the upstream repository
+
+Compares the upstream repository ([queengooborg/Bambu-Lab-RFID-Library](https://github.com/queengooborg/Bambu-Lab-RFID-Library)) against your local library and imports any UID directories that are present upstream but absent locally. UIDs are matched by their 8-character hex name regardless of which colour/material folder they sit in, so tags that have been moved or renamed in your library are correctly recognised as already present.
+
+```
+python sync_from_upstream.py              # fetch upstream + preview new UIDs
+python sync_from_upstream.py --apply      # fetch + import
+python sync_from_upstream.py --no-fetch   # preview without re-fetching
+python sync_from_upstream.py --no-fetch --apply   # import without re-fetching
+```
+
+The upstream remote is added automatically on first run. After importing, run the standard pipeline to normalise locations, names, and README status:
+
+```
+python fix_library.py --fix    # move imported files to correct location/name
+python update_readme.py        # update ✅/❌ status icons
+git add -A && git commit -m "Import N new tags from upstream" && git push
+```
+
+> [!NOTE]
+> Imported files land at the upstream folder paths, which may differ from your naming conventions (e.g. `Blue Grey` vs `Blue Gray`, `Green` vs `Glow Green`). `fix_library.py` handles the correction automatically. Suspicious or corrupt tags reported by `fix_library` should be reviewed before committing.
+
+---
+
 ### `update_readme.py` — Sync README status from actual library data
 
-Scans the library and updates the ✅/❌ status icons and variant ID columns in this README to reflect what is actually on disk. Rows marked ⚠️ or ⏳ are left untouched (those statuses are set manually).
+Scans the library and updates the ✅/❌ status icons and variant ID columns in this README to reflect what is actually on disk. Rows marked ⚠️ or ⏳ are left untouched (those statuses are set manually). Also warns if any ✅ row links to a colour folder that no longer exists on disk (e.g. after a rename).
 
 ```
 python update_readme.py [library_root] [--dry-run]
