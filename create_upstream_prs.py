@@ -228,6 +228,29 @@ PR_MANIFEST = [
     },
 
     {
+        'branch':  'scripts/workflow',
+        'title':   'Add sync_from_upstream.py and contribute_to_upstream.py',
+        'body': (
+            "Adds two workflow scripts for managing a fork against this repository:\n\n"
+            "- `sync_from_upstream.py` — fetches new tag UIDs from this repository and "
+            "imports any UID directories absent from the local library. UIDs are matched "
+            "by their 8-character hex name regardless of colour/material folder, so "
+            "renamed tags are correctly recognised as already present. Also excludes "
+            "quarantined UIDs from the import candidate list.\n\n"
+            "- `contribute_to_upstream.py` — finds local UIDs not yet in this repository "
+            "and creates or updates a single persistent pull-request branch "
+            "(`contribute/pending`) rooted on `upstream/main`. Requires the "
+            "[GitHub CLI](https://cli.github.com/) (`gh auth login`). Re-running after "
+            "new scans keeps the PR current; a fresh PR is opened automatically once "
+            "the previous one is merged or closed.\n"
+        ),
+        'ops': [
+            {'op': 'copy_file', 'src': 'sync_from_upstream.py'},
+            {'op': 'copy_file', 'src': 'contribute_to_upstream.py'},
+        ],
+    },
+
+    {
         'branch':  'scripts/menu',
         'title':   'Add menu.py — interactive text-based menu for all tools',
         'body': (
@@ -238,11 +261,51 @@ PR_MANIFEST = [
             "1. Read tag — display all parsed fields and library location\n"
             "2. Scan tag to database — full scan-and-add workflow\n"
             "3. Write tag from database — browse library and write to blank tag\n"
-            "4. Fix database — find and fix misplaced/misnamed entries\n\n"
+            "4. Fix database — find and fix misplaced/misnamed entries\n"
+            "5. Sync from upstream — import new tags from this repository\n"
+            "6. Contribute to upstream — create/update a PR with new local scans\n\n"
+            "Requires `sync_from_upstream.py` and `contribute_to_upstream.py` "
+            "(see the workflow scripts PR).\n\n"
             "```\npython menu.py\n```\n"
         ),
         'ops': [
             {'op': 'copy_file', 'src': 'menu.py'},
+        ],
+    },
+
+    # ------------------------------------------------------------------
+    # Documentation PR
+    # ------------------------------------------------------------------
+
+    {
+        'branch':  'docs/readme-tools',
+        'title':   'docs: add comprehensive Tools section to README',
+        'body': (
+            "Replaces the minimal 'Viewing Tag Data' section with a comprehensive "
+            "**Tools** section documenting all scripts, and enhances the "
+            "**Contributing** section with step-by-step instructions.\n\n"
+            "Content adapted from "
+            "[NickWaterton/Bambu-Lab-RFID-Library]"
+            "(https://github.com/NickWaterton/Bambu-Lab-RFID-Library), with all "
+            "self-referential links updated to point to this repository.\n\n"
+            "**Scripts documented:**\n"
+            "- `menu.py` — interactive menu (recommended entry point)\n"
+            "- `scanTag.py` — scan a tag and add to the library\n"
+            "- `writeTag.py` — write a library dump to a blank tag\n"
+            "- `parse.py` — parse and display tag data\n"
+            "- `fix_library.py` — find and fix library issues\n"
+            "- `colordb.py` — Bambu Studio colour database helpers\n"
+            "- `library_checker.py` — check for errors and colour mismatches\n"
+            "- `sync_from_upstream.py` — import new tags from upstream\n"
+            "- `contribute_to_upstream.py` — contribute new scans back to upstream\n"
+            "- `update_readme.py` — sync README status from library data\n"
+            "- `convert.py` — convert dumps to additional formats\n"
+            "- `repair.py` — restore missing sector-trailer keys\n"
+            "- `deriveKeys.py` — derive sector keys for a UID\n"
+            "- `scrape_filaments.py` — discover new filaments from the Bambu store\n"
+        ),
+        'ops': [
+            {'op': 'patch_readme_tools'},
         ],
     },
 
@@ -283,6 +346,94 @@ def _readme_rename(worktree_dir, old_rel, new_rel):
         old_colour = old_parts[-1]
         new_colour = new_parts[-1]
         print(f"  README: '{old_colour}' -> '{new_colour}'")
+
+
+def _patch_readme_tools(worktree_dir):
+    """
+    Replace the Tools + Contributing section in the upstream README with our
+    enhanced version.  Links that reference NickWaterton/Bambu-Lab-RFID-Library
+    are rewritten to queengooborg/Bambu-Lab-RFID-Library.  Links to the Tag
+    Guide (NickWaterton/Bambu-Lab-RFID-Tag-Guide) are preserved unchanged.
+    The material table and History section are taken entirely from upstream.
+    """
+    upstream_readme = worktree_dir / 'README.md'
+    our_readme      = LIBRARY_ROOT / 'README.md'
+
+    if not upstream_readme.exists():
+        print("  WARNING: README.md not found in worktree — skipping.")
+        return False
+    if not our_readme.exists():
+        print("  WARNING: local README.md not found — skipping.")
+        return False
+
+    upstream_text = upstream_readme.read_text(encoding='utf-8')
+    our_text      = our_readme.read_text(encoding='utf-8')
+
+    MATERIAL_MARKER = '## List of Bambu Lab Materials'
+
+    # ---- Find where to start replacing in upstream ----------------------
+    # Upstream currently has "## Viewing Tag Data"; might already have "## Tools"
+    # if this PR is re-run.  Replace from whichever comes first.
+    upstream_replace_start = None
+    for candidate in ('## Viewing Tag Data', '## Tools', '## Contributing'):
+        idx = upstream_text.find(f'\n{candidate}')
+        if idx >= 0:
+            upstream_replace_start = idx + 1  # skip the leading \n
+            break
+
+    if upstream_replace_start is None:
+        print("  WARNING: could not find Tools/Contributing anchor in upstream README.")
+        return False
+
+    # ---- Find where the material table starts in upstream ---------------
+    idx = upstream_text.find(f'\n{MATERIAL_MARKER}')
+    if idx < 0:
+        print(f"  WARNING: '{MATERIAL_MARKER}' not found in upstream README.")
+        return False
+    upstream_material_start = idx + 1  # skip leading \n
+
+    # ---- Extract Tools + Contributing from our README -------------------
+    our_tools_start    = our_text.find('\n## Tools')
+    our_material_start = our_text.find(f'\n{MATERIAL_MARKER}')
+
+    if our_tools_start < 0:
+        print("  WARNING: '## Tools' not found in local README — skipping.")
+        return False
+    if our_material_start < 0:
+        print(f"  WARNING: '{MATERIAL_MARKER}' not found in local README — skipping.")
+        return False
+
+    # Slice: from "## Tools\n" up to (but not including) "## List of..."
+    our_section = our_text[our_tools_start + 1 : our_material_start + 1]
+
+    # ---- Rewrite self-referential links ---------------------------------
+    our_section = our_section.replace(
+        'NickWaterton/Bambu-Lab-RFID-Library',
+        'queengooborg/Bambu-Lab-RFID-Library',
+    )
+    # NickWaterton/Bambu-Lab-RFID-Tag-Guide links are intentionally kept.
+
+    # ---- Splice and write -----------------------------------------------
+    new_text = (
+        upstream_text[:upstream_replace_start]
+        + our_section
+        + upstream_text[upstream_material_start:]
+    )
+
+    if new_text == upstream_text:
+        print("  README: no changes required (already up to date).")
+        return True
+
+    upstream_readme.write_text(new_text, encoding='utf-8')
+
+    # Count sections inserted for a helpful summary
+    n_sections = sum(1 for h in ('## Tools', '## Contributing')
+                     if h in our_section)
+    print(f"  README: replaced upstream Tools/Contributing with our version "
+          f"({n_sections} section(s) inserted).")
+    print( "  README: rewrote NickWaterton/Bambu-Lab-RFID-Library "
+           "→ queengooborg/Bambu-Lab-RFID-Library.")
+    return True
 
 
 def _apply_op(op, worktree_dir):
@@ -370,6 +521,9 @@ def _apply_op(op, worktree_dir):
             print(f"  README: updated {n} status row(s)")
         return True
 
+    elif kind == 'patch_readme_tools':
+        return _patch_readme_tools(worktree_dir)
+
     else:
         print(f"  ERROR: unknown op type '{kind}'")
         return False
@@ -427,6 +581,8 @@ def build_branch(pr_def, dry_run=False):
                 print(f"  copy_dir:     {op['src']}/")
             elif kind == 'update_readme':
                 print(f"  update_readme")
+            elif kind == 'patch_readme_tools':
+                print(f"  patch_readme_tools: splice Tools+Contributing from local README into upstream")
         return None
 
     # Delete stale local branch if present
