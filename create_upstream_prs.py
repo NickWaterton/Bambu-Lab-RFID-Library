@@ -100,62 +100,56 @@ PR_MANIFEST = [
     },
 
     {
-        'branch':  'data/pla-basic-grey-merges',
-        'title':   'PLA Basic: merge Grey/Dark Grey/Light Grey into Gray/Dark Gray/Light Gray',
+        'branch':  'data/naming-cleanup',
+        'title':   'Standardize colour folder names and fix misplaced tags',
         'body': (
-            "Upstream currently has duplicate `Grey`/`Gray` folder pairs in PLA Basic. "
-            "The README already links to the `Gray` spellings (matching Bambu Studio), "
-            "but the old `Grey` folders still exist alongside them with a small number "
-            "of UIDs not yet consolidated.\n\n"
-            "This PR merges the orphaned UIDs into the canonical folders and removes "
-            "the now-empty `Grey` variants:\n\n"
+            "Comprehensive cleanup of folder naming inconsistencies and misplaced tags "
+            "identified by cross-referencing with official Bambu Studio colour names.\n\n"
+            "**Grey → Gray consolidations** (Bambu Studio uses 'Gray' throughout; these "
+            "folders exist alongside the already-correct `Gray` variants with a handful "
+            "of UIDs still stranded in the old spelling):\n"
             "- `PLA Basic/Grey` (2 UIDs) → merged into `PLA Basic/Gray`\n"
             "- `PLA Basic/Dark Grey` (2 UIDs) → merged into `PLA Basic/Dark Gray`\n"
-            "- `PLA Basic/Light Grey` (2 UIDs) → merged into `PLA Basic/Light Gray`\n\n"
-            "Note: `Blue Grey` → `Blue Gray` is handled in a separate PR."
+            "- `PLA Basic/Light Grey` (2 UIDs) → merged into `PLA Basic/Light Gray`\n"
+            "- `PC/PC FR/Grey` (4 UIDs) → renamed to `PC/PC FR/Gray` "
+            "(no existing `Gray` folder; also fixes the broken README link)\n\n"
+            "**TPU for AMS leftover 'For AMS' folders** (canonical `Black` and "
+            "`Neon Green` folders already exist; README already links to them):\n"
+            "- `For AMS Black` → merged into `Black` (ED77573E already present, skipped)\n"
+            "- `For AMS Neon Green` → merged into `Neon Green` "
+            "(AA6722FE already present, folder removed)\n\n"
+            "**PETG Translucent Blue** (official name is 'Translucent Light Blue'; "
+            "both folders coexist upstream):\n"
+            "- `Translucent Blue` (2 UIDs) → merged into `Translucent Light Blue`\n\n"
+            "**Misplaced individual tags** (confirmed by reading tag data):\n"
+            "- `PLA Basic/Pink/4DD364F4` → moved to `PLA Basic/Orange` "
+            "(tag data shows colour `#FF6A13`, variant `A00-A0` — Orange)\n"
+            "- `PLA Basic/White/E4E447D1` → moved to `PLA Basic/Jade White` "
+            "(tag data identifies this as Jade White)\n"
+            "- `PLA Basic/White/2760A902` → removed from `PLA Basic/White` "
+            "(duplicate: already correctly filed under `PLA Tough+/White`)\n"
         ),
         'ops': [
-            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Grey',       'into': 'PLA/PLA Basic/Gray'},
-            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Dark Grey',   'into': 'PLA/PLA Basic/Dark Gray'},
-            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Light Grey',  'into': 'PLA/PLA Basic/Light Gray'},
-            {'op': 'update_readme'},
-        ],
-    },
-
-    {
-        'branch':  'data/pc-fr-grey-rename',
-        'title':   'PC FR: rename Grey to Gray (official Bambu Studio name)',
-        'body': (
-            "Renames `PC/PC FR/Grey` to `PC/PC FR/Gray` to match the official colour "
-            "name used in Bambu Studio.  The README already links to `Gray` (the correct "
-            "spelling), so this rename also fixes the broken link in the status table.\n\n"
-            "4 UIDs are moved from `Grey/` to `Gray/`."
-        ),
-        'ops': [
+            # --- Grey → Gray consolidations ---
+            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Grey',      'into': 'PLA/PLA Basic/Gray'},
+            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Dark Grey',  'into': 'PLA/PLA Basic/Dark Gray'},
+            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Light Grey', 'into': 'PLA/PLA Basic/Light Gray'},
             {'op': 'rename', 'from': 'PC/PC FR/Grey', 'to': 'PC/PC FR/Gray'},
-            {'op': 'update_readme'},
-        ],
-    },
-
-    {
-        'branch':  'data/tpu-for-ams-cleanup',
-        'title':   'TPU for AMS: merge leftover For AMS Black/Neon Green folders',
-        'body': (
-            "Upstream currently has duplicate folder pairs in `TPU/TPU for AMS`:\n\n"
-            "- `For AMS Black` (D57FFDA1, E6BAEEEB + a duplicate of ED77573E) "
-            "alongside the canonical `Black` folder\n"
-            "- `For AMS Neon Green` (AA6722FE, already duplicated in `Neon Green`)\n\n"
-            "This PR merges any UIDs that are not already present in the canonical "
-            "folder, removes the `For AMS` variants, and deduplcates the overlap "
-            "(ED77573E and AA6722FE are already in the correct folders).\n\n"
-            "The README already uses `Black` and `Neon Green` as the link targets, "
-            "so no README change is required beyond a status refresh."
-        ),
-        'ops': [
+            # --- TPU For AMS cleanup ---
             {'op': 'merge_folder', 'src': 'TPU/TPU for AMS/For AMS Black',
                                   'into': 'TPU/TPU for AMS/Black'},
             {'op': 'merge_folder', 'src': 'TPU/TPU for AMS/For AMS Neon Green',
                                   'into': 'TPU/TPU for AMS/Neon Green'},
+            # --- PETG Translucent Blue ---
+            {'op': 'merge_folder', 'src': 'PETG/PETG Translucent/Translucent Blue',
+                                  'into': 'PETG/PETG Translucent/Translucent Light Blue'},
+            # --- Misplaced individual UIDs ---
+            {'op': 'move_uid', 'uid': '4DD364F4',
+             'from': 'PLA/PLA Basic/Pink',        'to': 'PLA/PLA Basic/Orange'},
+            {'op': 'move_uid', 'uid': 'E4E447D1',
+             'from': 'PLA/PLA Basic/White',       'to': 'PLA/PLA Basic/Jade White'},
+            {'op': 'remove_uid', 'uid': '2760A902',
+             'from': 'PLA/PLA Basic/White'},   # already in PLA Tough+/White
             {'op': 'update_readme'},
         ],
     },
@@ -582,6 +576,44 @@ def _apply_op(op, worktree_dir):
             print(f"  README: updated {n} status row(s)")
         return True
 
+    elif kind == 'move_uid':
+        uid      = op['uid']
+        src_path = worktree_dir / op['from'] / uid
+        dst_path = worktree_dir / op['to']   / uid
+        if not src_path.exists():
+            print(f"  WARNING: move_uid source not found: {op['from']}/{uid}")
+            return False
+        if dst_path.exists():
+            print(f"  WARNING: move_uid destination already exists: {op['to']}/{uid} — skipping")
+            return True
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            ['git', 'mv', str(src_path.relative_to(worktree_dir)),
+                          str(dst_path.relative_to(worktree_dir))],
+            cwd=str(worktree_dir),
+        )
+        if result.returncode != 0:
+            print(f"  ERROR: git mv failed for {op['from']}/{uid} -> {op['to']}/{uid}")
+            return False
+        print(f"  Moved UID {uid}: {op['from']} -> {op['to']}")
+        return True
+
+    elif kind == 'remove_uid':
+        uid      = op['uid']
+        src_path = worktree_dir / op['from'] / uid
+        if not src_path.exists():
+            print(f"  WARNING: remove_uid not found: {op['from']}/{uid} — nothing to remove")
+            return True
+        result = subprocess.run(
+            ['git', 'rm', '-r', str(src_path.relative_to(worktree_dir))],
+            cwd=str(worktree_dir),
+        )
+        if result.returncode != 0:
+            print(f"  ERROR: git rm failed for {op['from']}/{uid}")
+            return False
+        print(f"  Removed duplicate UID {uid} from {op['from']}")
+        return True
+
     elif kind == 'patch_readme_tools':
         return _patch_readme_tools(worktree_dir)
 
@@ -642,6 +674,10 @@ def build_branch(pr_def, dry_run=False):
                 print(f"  copy_dir:     {op['src']}/")
             elif kind == 'update_readme':
                 print(f"  update_readme")
+            elif kind == 'move_uid':
+                print(f"  move_uid:     {op['from']}/{op['uid']} -> {op['to']}/{op['uid']}")
+            elif kind == 'remove_uid':
+                print(f"  remove_uid:   {op['from']}/{op['uid']} (duplicate)")
             elif kind == 'patch_readme_tools':
                 print(f"  patch_readme_tools: splice Tools+Contributing from local README into upstream")
         return None
