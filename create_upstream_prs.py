@@ -61,81 +61,62 @@ from contribute_to_upstream import (
 PR_MANIFEST = [
 
     # ------------------------------------------------------------------
-    # Data PRs
+    # Data PR  (single consolidated PR)
     # ------------------------------------------------------------------
 
     {
-        'branch':  'data/pla-glow-renames',
-        'title':   'PLA Glow: rename colours to official Bambu Studio names',
-        'body': (
-            "Renames the PLA Glow colour folders to match the official names used in "
-            "Bambu Studio (e.g. **Blue** → **Glow Blue**, **Green** → **Glow Green**).\n\n"
-            "The upstream folder `Orange` is merged into the existing `Glow Orange` folder "
-            "(which was already correctly named) and the redundant `Orange` folder is removed.\n\n"
-            "README status links are updated to match the new paths."
-        ),
-        'ops': [
-            {'op': 'rename',       'from': 'PLA/PLA Glow/Blue',   'to': 'PLA/PLA Glow/Glow Blue'},
-            {'op': 'rename',       'from': 'PLA/PLA Glow/Green',   'to': 'PLA/PLA Glow/Glow Green'},
-            {'op': 'rename',       'from': 'PLA/PLA Glow/Pink',    'to': 'PLA/PLA Glow/Glow Pink'},
-            {'op': 'rename',       'from': 'PLA/PLA Glow/Yellow',  'to': 'PLA/PLA Glow/Glow Yellow'},
-            # 'Glow Orange' already exists upstream; move UIDs from 'Orange' into it
-            {'op': 'merge_folder', 'src': 'PLA/PLA Glow/Orange',  'into': 'PLA/PLA Glow/Glow Orange'},
-            {'op': 'update_readme'},
-        ],
-    },
-
-    {
-        'branch':  'data/pla-basic-blue-gray',
-        'title':   'PLA Basic: rename Blue Grey to Blue Gray (official Bambu Studio name)',
-        'body': (
-            "Renames `PLA/PLA Basic/Blue Grey` to `PLA/PLA Basic/Blue Gray` to match "
-            "the official colour name used in Bambu Studio.\n\n"
-            "README link and status updated to match."
-        ),
-        'ops': [
-            {'op': 'rename',       'from': 'PLA/PLA Basic/Blue Grey', 'to': 'PLA/PLA Basic/Blue Gray'},
-            {'op': 'update_readme'},
-        ],
-    },
-
-    {
         'branch':  'data/naming-cleanup',
-        'title':   'Standardize colour folder names and fix misplaced tags',
+        'title':   'Data: standardize all folder names to match official Bambu Studio names',
         'body': (
-            "Comprehensive cleanup of folder naming inconsistencies and misplaced tags "
-            "identified by cross-referencing with official Bambu Studio colour names.\n\n"
-            "**Grey → Gray consolidations** (Bambu Studio uses 'Gray' throughout; these "
-            "folders exist alongside the already-correct `Gray` variants with a handful "
-            "of UIDs still stranded in the old spelling):\n"
-            "- `PLA Basic/Grey` (2 UIDs) → merged into `PLA Basic/Gray`\n"
-            "- `PLA Basic/Dark Grey` (2 UIDs) → merged into `PLA Basic/Dark Gray`\n"
-            "- `PLA Basic/Light Grey` (2 UIDs) → merged into `PLA Basic/Light Gray`\n"
-            "- `PC/PC FR/Grey` (4 UIDs) → renamed to `PC/PC FR/Gray` "
-            "(no existing `Gray` folder; also fixes the broken README link)\n\n"
-            "**TPU for AMS leftover 'For AMS' folders** (canonical `Black` and "
-            "`Neon Green` folders already exist; README already links to them):\n"
-            "- `For AMS Black` → merged into `Black` (ED77573E already present, skipped)\n"
-            "- `For AMS Neon Green` → merged into `Neon Green` "
-            "(AA6722FE already present, folder removed)\n\n"
-            "**PETG Translucent Blue** (official name is 'Translucent Light Blue'; "
-            "both folders coexist upstream):\n"
+            "Comprehensive cleanup of every folder naming inconsistency identified by "
+            "cross-referencing the library against official Bambu Studio colour names, "
+            "plus corrections for misplaced tags confirmed by reading tag data.\n\n"
+            "**PLA Glow — rename to official 'Glow …' prefix:**\n"
+            "- `Blue` → `Glow Blue`\n"
+            "- `Green` → `Glow Green`\n"
+            "- `Pink` → `Glow Pink`\n"
+            "- `Yellow` → `Glow Yellow`\n"
+            "- `Orange` → merged into existing `Glow Orange` (redundant folder removed)\n\n"
+            "**PLA Basic — Grey → Gray** (Bambu Studio uses 'Gray' throughout):\n"
+            "- `Blue Grey` → `Blue Gray`\n"
+            "- `Grey` (2 UIDs) → merged into existing `Gray`\n"
+            "- `Dark Grey` (2 UIDs) → merged into existing `Dark Gray`\n"
+            "- `Light Grey` (2 UIDs) → merged into existing `Light Gray`\n\n"
+            "**PLA Silk Multi-Color:**\n"
+            "- `Velvet Eclipse` → `Velvet Eclipse (Black-Red)` (official product name)\n\n"
+            "**PC FR — Grey → Gray:**\n"
+            "- `Grey` (4 UIDs) → `Gray` (also fixes the broken README link)\n\n"
+            "**TPU for AMS — remove leftover 'For AMS' prefixed folders:**\n"
+            "- `For AMS Black` → merged into `Black` (one UID already present, skipped)\n"
+            "- `For AMS Neon Green` → merged into `Neon Green` (UID already present, folder removed)\n\n"
+            "**PETG Translucent — consolidate old name:**\n"
             "- `Translucent Blue` (2 UIDs) → merged into `Translucent Light Blue`\n\n"
-            "**Misplaced individual tags** (confirmed by reading tag data):\n"
-            "- `PLA Basic/Pink/4DD364F4` → moved to `PLA Basic/Orange` "
-            "(tag data shows colour `#FF6A13`, variant `A00-A0` — Orange)\n"
-            "- `PLA Basic/White/E4E447D1` → moved to `PLA Basic/Jade White` "
-            "(tag data identifies this as Jade White)\n"
-            "- `PLA Basic/White/2760A902` → removed from `PLA Basic/White` "
-            "(duplicate: already correctly filed under `PLA Tough+/White`)\n"
+            "**Misplaced individual tags** (confirmed by tag data):\n"
+            "- `PLA Basic/Pink/4DD364F4` → `PLA Basic/Orange` "
+            "(colour `#FF6A13`, variant `A00-A0` — Orange, not Pink)\n"
+            "- `PLA Basic/White/E4E447D1` → `PLA Basic/Jade White`\n"
+            "- `PLA Basic/White/2760A902` removed (duplicate — already in `PLA Tough+/White`)\n\n"
+            "README status links and icons updated throughout.\n"
         ),
         'ops': [
-            # --- Grey → Gray consolidations ---
-            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Grey',      'into': 'PLA/PLA Basic/Gray'},
-            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Dark Grey',  'into': 'PLA/PLA Basic/Dark Gray'},
-            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Light Grey', 'into': 'PLA/PLA Basic/Light Gray'},
-            {'op': 'rename', 'from': 'PC/PC FR/Grey', 'to': 'PC/PC FR/Gray'},
-            # --- TPU For AMS cleanup ---
+            # --- PLA Glow renames ---
+            {'op': 'rename',       'from': 'PLA/PLA Glow/Blue',   'to': 'PLA/PLA Glow/Glow Blue'},
+            {'op': 'rename',       'from': 'PLA/PLA Glow/Green',  'to': 'PLA/PLA Glow/Glow Green'},
+            {'op': 'rename',       'from': 'PLA/PLA Glow/Pink',   'to': 'PLA/PLA Glow/Glow Pink'},
+            {'op': 'rename',       'from': 'PLA/PLA Glow/Yellow', 'to': 'PLA/PLA Glow/Glow Yellow'},
+            {'op': 'merge_folder', 'src':  'PLA/PLA Glow/Orange', 'into': 'PLA/PLA Glow/Glow Orange'},
+            # --- PLA Basic Grey → Gray ---
+            {'op': 'rename',       'from': 'PLA/PLA Basic/Blue Grey',  'to': 'PLA/PLA Basic/Blue Gray'},
+            {'op': 'merge_folder', 'src':  'PLA/PLA Basic/Grey',       'into': 'PLA/PLA Basic/Gray'},
+            {'op': 'merge_folder', 'src':  'PLA/PLA Basic/Dark Grey',  'into': 'PLA/PLA Basic/Dark Gray'},
+            {'op': 'merge_folder', 'src':  'PLA/PLA Basic/Light Grey', 'into': 'PLA/PLA Basic/Light Gray'},
+            # --- PLA Silk Multi-Color ---
+            {'op': 'rename',
+             'from': 'PLA/PLA Silk Multi-Color/Velvet Eclipse',
+             'to':   'PLA/PLA Silk Multi-Color/Velvet Eclipse (Black-Red)'},
+            # --- PC FR Grey → Gray ---
+            {'op': 'rename',       'from': 'PC/PC FR/Grey', 'to': 'PC/PC FR/Gray'},
+            # --- TPU for AMS cleanup ---
             {'op': 'merge_folder', 'src': 'TPU/TPU for AMS/For AMS Black',
                                   'into': 'TPU/TPU for AMS/Black'},
             {'op': 'merge_folder', 'src': 'TPU/TPU for AMS/For AMS Neon Green',
@@ -144,29 +125,12 @@ PR_MANIFEST = [
             {'op': 'merge_folder', 'src': 'PETG/PETG Translucent/Translucent Blue',
                                   'into': 'PETG/PETG Translucent/Translucent Light Blue'},
             # --- Misplaced individual UIDs ---
-            {'op': 'move_uid', 'uid': '4DD364F4',
-             'from': 'PLA/PLA Basic/Pink',        'to': 'PLA/PLA Basic/Orange'},
-            {'op': 'move_uid', 'uid': 'E4E447D1',
-             'from': 'PLA/PLA Basic/White',       'to': 'PLA/PLA Basic/Jade White'},
+            {'op': 'move_uid',   'uid': '4DD364F4',
+             'from': 'PLA/PLA Basic/Pink',  'to': 'PLA/PLA Basic/Orange'},
+            {'op': 'move_uid',   'uid': 'E4E447D1',
+             'from': 'PLA/PLA Basic/White', 'to': 'PLA/PLA Basic/Jade White'},
             {'op': 'remove_uid', 'uid': '2760A902',
-             'from': 'PLA/PLA Basic/White'},   # already in PLA Tough+/White
-            {'op': 'update_readme'},
-        ],
-    },
-
-    {
-        'branch':  'data/velvet-eclipse-rename',
-        'title':   'PLA Silk Multi-Color: rename Velvet Eclipse to include colour description',
-        'body': (
-            "Renames `Velvet Eclipse` to `Velvet Eclipse (Black-Red)` to include the "
-            "colour description in the folder name, matching the official Bambu Studio "
-            "product name.\n\n"
-            "README link and status updated to match."
-        ),
-        'ops': [
-            {'op': 'rename',
-             'from': 'PLA/PLA Silk Multi-Color/Velvet Eclipse',
-             'to':   'PLA/PLA Silk Multi-Color/Velvet Eclipse (Black-Red)'},
+             'from': 'PLA/PLA Basic/White'},          # already in PLA Tough+/White
             {'op': 'update_readme'},
         ],
     },
