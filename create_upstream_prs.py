@@ -100,6 +100,67 @@ PR_MANIFEST = [
     },
 
     {
+        'branch':  'data/pla-basic-grey-merges',
+        'title':   'PLA Basic: merge Grey/Dark Grey/Light Grey into Gray/Dark Gray/Light Gray',
+        'body': (
+            "Upstream currently has duplicate `Grey`/`Gray` folder pairs in PLA Basic. "
+            "The README already links to the `Gray` spellings (matching Bambu Studio), "
+            "but the old `Grey` folders still exist alongside them with a small number "
+            "of UIDs not yet consolidated.\n\n"
+            "This PR merges the orphaned UIDs into the canonical folders and removes "
+            "the now-empty `Grey` variants:\n\n"
+            "- `PLA Basic/Grey` (2 UIDs) → merged into `PLA Basic/Gray`\n"
+            "- `PLA Basic/Dark Grey` (2 UIDs) → merged into `PLA Basic/Dark Gray`\n"
+            "- `PLA Basic/Light Grey` (2 UIDs) → merged into `PLA Basic/Light Gray`\n\n"
+            "Note: `Blue Grey` → `Blue Gray` is handled in a separate PR."
+        ),
+        'ops': [
+            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Grey',       'into': 'PLA/PLA Basic/Gray'},
+            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Dark Grey',   'into': 'PLA/PLA Basic/Dark Gray'},
+            {'op': 'merge_folder', 'src': 'PLA/PLA Basic/Light Grey',  'into': 'PLA/PLA Basic/Light Gray'},
+            {'op': 'update_readme'},
+        ],
+    },
+
+    {
+        'branch':  'data/pc-fr-grey-rename',
+        'title':   'PC FR: rename Grey to Gray (official Bambu Studio name)',
+        'body': (
+            "Renames `PC/PC FR/Grey` to `PC/PC FR/Gray` to match the official colour "
+            "name used in Bambu Studio.  The README already links to `Gray` (the correct "
+            "spelling), so this rename also fixes the broken link in the status table.\n\n"
+            "4 UIDs are moved from `Grey/` to `Gray/`."
+        ),
+        'ops': [
+            {'op': 'rename', 'from': 'PC/PC FR/Grey', 'to': 'PC/PC FR/Gray'},
+            {'op': 'update_readme'},
+        ],
+    },
+
+    {
+        'branch':  'data/tpu-for-ams-cleanup',
+        'title':   'TPU for AMS: merge leftover For AMS Black/Neon Green folders',
+        'body': (
+            "Upstream currently has duplicate folder pairs in `TPU/TPU for AMS`:\n\n"
+            "- `For AMS Black` (D57FFDA1, E6BAEEEB + a duplicate of ED77573E) "
+            "alongside the canonical `Black` folder\n"
+            "- `For AMS Neon Green` (AA6722FE, already duplicated in `Neon Green`)\n\n"
+            "This PR merges any UIDs that are not already present in the canonical "
+            "folder, removes the `For AMS` variants, and deduplcates the overlap "
+            "(ED77573E and AA6722FE are already in the correct folders).\n\n"
+            "The README already uses `Black` and `Neon Green` as the link targets, "
+            "so no README change is required beyond a status refresh."
+        ),
+        'ops': [
+            {'op': 'merge_folder', 'src': 'TPU/TPU for AMS/For AMS Black',
+                                  'into': 'TPU/TPU for AMS/Black'},
+            {'op': 'merge_folder', 'src': 'TPU/TPU for AMS/For AMS Neon Green',
+                                  'into': 'TPU/TPU for AMS/Neon Green'},
+            {'op': 'update_readme'},
+        ],
+    },
+
+    {
         'branch':  'data/velvet-eclipse-rename',
         'title':   'PLA Silk Multi-Color: rename Velvet Eclipse to include colour description',
         'body': (
