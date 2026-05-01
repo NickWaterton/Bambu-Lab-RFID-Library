@@ -165,7 +165,7 @@ def write_flipper_nfc(path, tag):
 
 # Check directory and write any missing files
 
-def normalize_nonstandard_dumps(path):
+def normalize_filenames(path):
     """
     Rename any *.bin dump files that don't use the standard -dump.bin suffix
     to the hf-mf-<UID>-dump.bin convention, and rename their matching key file
@@ -211,7 +211,7 @@ def sync_directory(path):
         path = path.parent
 
     # Rename any non-standard *.bin dumps to hf-mf-<UID>-dump.bin before grouping
-    normalize_nonstandard_dumps(path)
+    normalize_filenames(path)
 
     files = list(path.iterdir())
     unhandled_files = []

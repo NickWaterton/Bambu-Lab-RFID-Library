@@ -203,7 +203,7 @@ def get_products():
     print("Getting products from Bambu Lab, this may take a while...")
     soup = get_page(f"{BASE_URL}/collections/bambu-lab-3d-printer-filament?Compatibility=Compatible+with+AMS")
 
-    product_links = list(filter(lambda a: not any(s in (a.get('bl-m-value') or '') for s in ['Bundle', 'Pack']), soup.select("a.ProductItem__ImageWrapper")))
+    product_links = list(filter(lambda a: not any(s in a.get('bl-m-value', '') for s in ['Bundle', 'Pack']), soup.select("a.ProductItem__ImageWrapper")))
 
     # PETG Basic is not in the "Compatible with AMS" category anymore...not sure why
     product_links.append({"href": "/products/petg-basic"})

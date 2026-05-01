@@ -147,37 +147,43 @@ PR_MANIFEST = [
             "developed in [NickWaterton/Bambu-Lab-RFID-Library]"
             "(https://github.com/NickWaterton/Bambu-Lab-RFID-Library):\n\n"
             "- `parse.py` — enhanced tag parsing\n"
-            "- `convert.py` — format conversion improvements\n"
-            "- `library_checker.py` — additional checks\n"
-            "- `repair.py` — key repair improvements\n"
+            "- `convert.py` — format conversion; `normalize_filenames()` renamed from "
+            "`normalize_nonstandard_dumps()` per review feedback; `.get('bl-m-value', '')` "
+            "style fix in `scrape_filaments.py`\n"
             "- `scrape_filaments.py` — scraper enhancements\n"
         ),
         'ops': [
             {'op': 'copy_file', 'src': 'parse.py'},
             {'op': 'copy_file', 'src': 'convert.py'},
-            {'op': 'copy_file', 'src': 'library_checker.py'},
-            {'op': 'copy_file', 'src': 'repair.py'},
             {'op': 'copy_file', 'src': 'scrape_filaments.py'},
         ],
     },
 
     {
         'branch':  'scripts/foundation',
-        'title':   'Add foundation scripts: categories, key derivation, shared utilities',
+        'title':   'Add foundation scripts: categories, key derivation, utilities, checker, repair',
         'body': (
-            "Adds three new foundational modules used by other scripts:\n\n"
+            "Adds the foundational modules that other scripts depend on, bundled "
+            "together so the PR is self-contained:\n\n"
             "- `categories.py` — shared category/material lookup tables "
             "(maps `filament_type` values to top-level folder names, handles "
             "multi-colour material routing)\n"
-            "- `deriveKeys.py` — derives Mifare sector keys from tag UID without "
-            "requiring a sniffing session\n"
+            "- `deriveKeys.py` — derives all 32 Mifare sector keys from a tag UID "
+            "without requiring a sniffing session\n"
             "- `lib/` — shared utilities for locating the Proxmark3 installation "
             "and running Proxmark3 commands\n"
+            "- `library_checker.py` — scans the library for tags in the wrong "
+            "category/material folder, or colour folders containing more than one "
+            "distinct hex colour (requires `categories.py`)\n"
+            "- `repair.py` — restores zeroed-out sector-trailer keys in a dump by "
+            "re-deriving them from the UID (requires `deriveKeys.py`)\n"
         ),
         'ops': [
             {'op': 'copy_file', 'src': 'categories.py'},
             {'op': 'copy_file', 'src': 'deriveKeys.py'},
             {'op': 'copy_dir',  'src': 'lib'},
+            {'op': 'copy_file', 'src': 'library_checker.py'},
+            {'op': 'copy_file', 'src': 'repair.py'},
         ],
     },
 
